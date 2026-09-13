@@ -346,10 +346,10 @@ Creates: `LICENSE` (Apache-2.0), `.gitignore`, `requirements.txt` (pinned), `.en
 You run: terminal 1 `uvicorn pantrypilot.web.main:app --reload`; terminal 2 `cd frontend; npm run dev`
 You see: `http://localhost:5173` shows the PantryPilot card with "✓ Backend connected".
 
-**Step 2 — Database tables + seed data**
-Creates: `database.py`, `models/*`, `scripts/seed_demo.py`, `scripts/reset_db.py`.
-You run: `python -m scripts.seed_demo`
-You see: a printed summary ("Created 5 restaurants, 7 pantries, 8 drivers, 1 admin…") plus the demo logins, and a `data/pantrypilot.db` file.
+**Step 2 — Database tables + seed data** ✅ done
+Creates: `database.py`, `models/*` (users, places, offers, agent_records, system), `auth/passwords.py`, `scripts/demo_world.py` (Seattle data), `scripts/seed_demo.py`, `scripts/show_db.py`, `scripts/reset_db.py`, `pytest.ini`, tests.
+You run: `python -m scripts.seed_demo --reset` then `python -m scripts.show_db`
+You see: a printed summary (5 restaurants, 7 pantries, 8 drivers, 1 admin, 14 past deliveries) plus the demo logins, and a `data/pantrypilot.db` file.
 
 **Step 3 — Signup, login, four roles**
 Creates: backend `auth/*`, `web/routes/auth.py` (`/api/auth/signup`, `/login`, `/logout`, `/me`); frontend React Router, `auth/` login state + role guards, `Layout` component, Login/Signup pages, an empty home page per role.

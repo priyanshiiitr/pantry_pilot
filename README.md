@@ -25,6 +25,8 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1            # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 pip install -r requirements.txt
 copy .env.example .env
+python -m scripts.seed_demo --reset   # build the demo Seattle world (all passwords: demo1234)
+python -m scripts.show_db             # optional: see what's in the database
 uvicorn pantrypilot.web.main:app --reload
 
 # 2. Frontend — in a second terminal

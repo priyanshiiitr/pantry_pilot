@@ -10,6 +10,8 @@ pydantic-settings==2.15.0   # Reads settings from the .env file into a typed Pyt
 # --- Database ---
 sqlalchemy==2.0.52          # Python classes <-> database tables (SQLite now, Postgres later)
 
+tzdata==2026.4              # Time-zone database (Windows doesn't include one) for local opening hours
+
 # --- Auth ---
 bcrypt==5.0.0               # One-way password hashing
 

@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     session_secret: str = "dev-only-secret-change-me"
     database_url: str = DEFAULT_DATABASE_URL
 
+    # --- Demo city ---
+    # Pantry opening hours and driver availability are written in this city's local time.
+    city_name: str = "Seattle, WA"
+    city_timezone: str = "America/Los_Angeles"
+
     # --- AI model (used from Step 6) ---
     model_provider: str = "anthropic"
     model_id: str = ""
