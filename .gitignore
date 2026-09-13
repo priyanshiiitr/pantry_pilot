@@ -1,0 +1,21 @@
+# Secrets — never commit real keys
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local data: SQLite database file and saved agent sessions
+data/
+
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

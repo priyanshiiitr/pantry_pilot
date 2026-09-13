@@ -1,0 +1,26 @@
+# PantryPilot Python dependencies (exact versions pinned so everyone gets the same setup).
+# Install with:  pip install -r requirements.txt
+
+# --- Web backend ---
+fastapi==0.141.1            # Web framework: turns Python functions into API endpoints
+uvicorn==0.52.4             # The server program that runs the FastAPI app
+itsdangerous==2.2.0         # Signs the login cookie so it can't be tampered with
+pydantic-settings==2.15.0   # Reads settings from the .env file into a typed Python object
+
+# --- Database ---
+sqlalchemy==2.0.52          # Python classes <-> database tables (SQLite now, Postgres later)
+
+# --- Auth ---
+bcrypt==5.0.0               # One-way password hashing
+
+# --- Background jobs ---
+apscheduler==3.11.3         # "Run this function every N seconds" timer for the agent worker
+
+# --- AI agents ---
+# Extras: anthropic = Claude API client, openai = OpenAI client, otel = OpenTelemetry tracing.
+# Amazon Bedrock support is built in (uses boto3).
+strands-agents[anthropic,openai,otel]==1.55.1
+
+# --- Tests ---
+pytest==9.1.1               # Test runner
+httpx==0.28.1               # Needed by FastAPI's TestClient to call the API in tests

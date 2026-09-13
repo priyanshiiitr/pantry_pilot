@@ -1,0 +1,445 @@
+# PantryPilot — Build Plan
+
+> Status: **DRAFT — waiting for your approval.** No code has been written yet.
+
+---
+
+## 1. The idea in one paragraph
+
+Restaurants post leftover food. A small **team of AI agents** wakes up on its own, reads the offer, checks which food pantries can take it, picks one, and asks a volunteer driver to collect it. It explains **why** it chose what it chose. When it hits something it can't decide responsibly (the food will spoil first, no drivers, unfair split, unclear allergens), it **pauses and asks a human admin** with a "decision card". The admin clicks an option and the agent carries on from where it stopped.
+
+---
+
+## 2. What I checked in the Strands docs (and the version I'm pinning)
+
+I read the current docs at strandsagents.com. I also downloaded the real package and read its source code, so the names below are what the installed library actually exposes, not what I remember.
+
+**Pinned version: `strands-agents==1.55.1`**, the newest release on PyPI today. We install it with the extras `[anthropic,openai,otel]`.
+*(An "extra" is an optional add-on bundle: `anthropic` = the Claude API client, `otel` = tracing support.)*
+
+Note: the Python SDK source has moved into the `strands-agents/harness-sdk` GitHub repo (folder `strands-py`), but the pip package name is still `strands-agents`.
+
+| Feature | Exact API in 1.55.1 | What it means in plain words |
+|---|---|---|
+| Tools | `from strands import tool, ToolContext` → `@tool`, `@tool(context=True)` | Put `@tool` above a normal Python function and the agent is allowed to call it. The docstring becomes the explanation the AI reads. |
+| Agent | `Agent(model=, system_prompt=, tools=, name=, agent_id=, hooks=, session_manager=, structured_output_model=, trace_attributes=)` | One AI "worker" with its instructions and its toolbox. |
+| Structured output | `result = agent(prompt, structured_output_model=MyModel)` → `result.structured_output` · errors raise `strands.types.exceptions.StructuredOutputException` | Forces the AI to reply with a filled-in form (a Pydantic class) instead of free text, and checks the form is valid. (The old `agent.structured_output()` is deprecated, so we won't use it.) |
+| Multi-agent | Agents-as-tools: call a specialist agent from inside an `@tool` function (a shortcut `Agent.as_tool(...)` also exists). Also available: `from strands.multiagent import GraphBuilder, Swarm` | A "manager" agent that can call "specialist" agents the same way it calls a tool. |
+| Interrupts (human-in-the-loop) | Inside a tool: `tool_context.interrupt("name", reason={...})` · inside a hook: `event.interrupt(...)` on `BeforeToolCallEvent` · check `result.stop_reason == "interrupt"` and `result.interrupts` (each has `.id`, `.name`, `.reason`) · resume with `agent([{"interruptResponse": {"interruptId": id, "response": value}}])` | The agent can stop mid-task, say "I need a human", and later pick up exactly where it paused once it gets the answer. |
+| Hooks | `from strands.hooks import HookProvider, HookRegistry, BeforeInvocationEvent, AfterInvocationEvent, BeforeToolCallEvent, AfterToolCallEvent, MessageAddedEvent` | Little "listeners" that run automatically at moments like "the agent is about to call a tool". We use them for logging and for an approval gate. |
+| Sessions | `from strands.session import FileSessionManager` → `FileSessionManager(session_id=, storage_dir=)`. Later swap: `S3SessionManager`, or `RepositorySessionManager(session_id=, session_repository=)` with our own storage. | Saves the agent's conversation, state **and paused-interrupt state** to disk, so a restart doesn't lose it. |
+| Memory | `strands.memory.MemoryManager` / `MemoryStore` (new in recent versions) | Long-term facts across many offers. I'll evaluate it in Step 13 and fall back to a simple table plus tools if it's too complex. |
+| Tracing | `from strands.telemetry import StrandsTelemetry` → `.setup_console_exporter()`, `.setup_otlp_exporter()` | Records a timeline of every model call and tool call (OpenTelemetry = an industry-standard format for traces). |
+| Model providers | `strands.models.anthropic.AnthropicModel(client_args={"api_key": ...}, model_id=, max_tokens=)` · `strands.models.BedrockModel(model_id=, region_name=)` · `strands.models.openai.OpenAIModel(client_args=, model_id=)` | Switch AI provider through `.env`. |
+| Ready-made approval (considered) | `strands.vended_interventions.hitl.HumanInTheLoop` via `Agent(interventions=[...])` | A built-in "ask before running tools" helper. We write our own small hook instead, so you can read exactly how it works and so the decision card has our format. |
+| AgentCore (later) | `from bedrock_agentcore.runtime import BedrockAgentCoreApp` → `@app.entrypoint`, `app.run()` (package `bedrock-agentcore` 1.23.0) | A thin wrapper that lets AWS host our agent. Only used in the deployment doc and a stub file. |
+
+---
+
+## 3. Tech stack
+
+| Piece | Choice | Why |
+|---|---|---|
+| Language | Python 3.12 (already installed on your machine) | — |
+| Web server | **FastAPI** + **Uvicorn** | FastAPI = a Python web framework; Uvicorn = the program that runs it. |
+| Database | **SQLite** via **SQLAlchemy 2** | SQLite = a database stored in one file, no setup. SQLAlchemy = Python classes that map to tables, so moving to Postgres later is a one-line change. |
+| Frontend | **React 19** (plain JavaScript, no TypeScript) + **Vite 6** + **React Router** + plain CSS | *(Changed from Jinja2/HTMX at your request.)* React = build pages from reusable pieces called components. Vite = the dev tool that runs React on port 5173 and forwards `/api` calls to the backend. Vite 6 is chosen because your Node 22.11 is too old for Vite 8. |
+| API style | FastAPI returns **JSON** under `/api/...` | The React app fetches data from these URLs. |
+| Live updates | React polls the API every few seconds | "Polling" = asking the server "anything new?" on a timer. Simple and reliable. |
+| Background jobs | **APScheduler** | A timer library: "run this function every 15 seconds". |
+| Passwords | **bcrypt** | Stores a scrambled one-way version of each password, never the real one. |
+| Login sessions | Starlette `SessionMiddleware` (signed cookie) | After login the browser holds a tamper-proof cookie with your user id. |
+| Tests | **pytest** | — |
+| Map | **Leaflet** + OpenStreetMap tiles | A simple, free map library. |
+
+Exact versions of everything get pinned in `requirements.txt` in Step 1.
+
+---
+
+## 4. Folder structure
+
+```
+pantry_pilot/
+├── LICENSE                  Apache-2.0
+├── README.md                Problem, quickstart, "Strands features we used and where"
+├── PLAN.md                  This file
+├── requirements.txt         Pinned dependencies
+├── .env.example             Template for secrets and settings (real .env is git-ignored)
+├── docs/
+│   ├── architecture.md      Diagram + explanation
+│   ├── aws-deployment.md    EventBridge → Lambda → AgentCore path
+│   └── demo-script.md       5-minute video, shot by shot
+├── pantrypilot/             The Python application (a "package" = folder of Python files)
+│   ├── README.md
+│   ├── config.py            Reads .env into one settings object
+│   ├── database.py          Database connection + session helper
+│   ├── models/              DATABASE TABLES (SQLAlchemy classes)
+│   │   ├── users.py         User accounts + roles
+│   │   ├── places.py        Restaurant, Pantry, Driver profiles
+│   │   ├── offers.py        Offer, Delivery, DispatchRequest
+│   │   └── agent_records.py Decision, AgentRun, AgentLog, AgentMemory, Notification
+│   ├── services/            PLAIN DETERMINISTIC LOGIC (no AI) shared by web + tools
+│   │   ├── geo.py           Distance (haversine formula), travel-time estimate, "is it open?"
+│   │   ├── fairness.py      Computes how much each pantry received recently (numbers only)
+│   │   ├── offers.py        Create/update offers and deliveries safely
+│   │   └── notifications.py Store messages for users
+│   ├── auth/
+│   │   ├── passwords.py     Hash + check passwords
+│   │   └── current_user.py  "Who is logged in?" + "is this user allowed here?"
+│   ├── web/                 JSON API that the React frontend calls (all URLs start with /api)
+│   │   ├── main.py          Creates the FastAPI app and attaches the routers
+│   │   ├── schemas.py       Pydantic shapes of API requests/responses
+│   │   └── routes/          auth.py, restaurant.py, pantry.py, driver.py, admin.py, decisions.py, demo.py
+│   ├── agents/              THE AI REASONING LAYER
+│   │   ├── README.md
+│   │   ├── model_provider.py    Builds the AI model from .env
+│   │   ├── schemas.py           Pydantic "forms" the agents must fill in
+│   │   ├── prompts/             intake.md, matching.md, dispatch.md, coordinator.md
+│   │   ├── intake_agent.py
+│   │   ├── matching_agent.py
+│   │   ├── dispatch_agent.py
+│   │   ├── coordinator_agent.py
+│   │   ├── tools/               offer_tools, pantry_tools, driver_tools, action_tools, memory_tools, human_tools
+│   │   ├── hooks/               reasoning_log_hook.py, approval_gate_hook.py
+│   │   ├── sessions.py          Session-manager factory (file now; S3/AgentCore later)
+│   │   ├── telemetry.py         Turns on OpenTelemetry tracing
+│   │   └── runner.py            run_case() and resume_case(): the only entry points into the agents
+│   ├── worker/
+│   │   ├── __main__.py      `python -m pantrypilot.worker` starts the background loop
+│   │   └── jobs.py          The scheduled jobs
+│   └── deploy/
+│       └── agentcore_app.py Stub AgentCore entrypoint (not needed locally)
+├── frontend/                ★ THE REACT FRONTEND (see section 4.1)
+│   ├── README.md
+│   ├── package.json         JavaScript dependencies (like requirements.txt)
+│   ├── vite.config.js       Dev server on :5173, forwards /api to FastAPI on :8000
+│   ├── index.html
+│   └── src/
+│       ├── main.jsx         Starts React
+│       ├── App.jsx          Page routes (which URL shows which page)
+│       ├── api.js           The ONLY file that calls the backend
+│       ├── auth/            Login state (who is logged in), route guards per role
+│       ├── pages/           restaurant/, pantry/, driver/, admin/, auth/
+│       ├── components/      StatusBadge, OfferCard, DecisionCard, ActivityTimeline, StatCard, MapView, Layout
+│       ├── hooks/           usePolling.js (refresh data every few seconds)
+│       └── styles.css       All styling, colours as CSS variables
+├── scripts/
+│   ├── seed_demo.py         Builds a fake city: pantries, drivers, restaurants, accounts
+│   ├── trigger_hard_case.py Creates a scenario that should make the agent escalate
+│   └── reset_db.py          Wipe and start fresh
+├── tests/
+└── data/                    (git-ignored) pantrypilot.db, sessions/
+```
+
+---
+
+## 4.1 The frontend — where it lives and how it works
+
+**Where:** the top-level **`frontend/`** folder, a React app (changed from server-rendered templates at your request). The backend (`pantrypilot/web/`) only returns JSON.
+
+**Two programs during development:**
+- `uvicorn pantrypilot.web.main:app --reload` → backend on **http://localhost:8000**
+- `npm run dev` inside `frontend/` → React app on **http://localhost:5173** (the address you open)
+
+Vite forwards (*proxies*) any `/api/...` request from the React app to port 8000. The browser therefore sees a single website, so login cookies work with no CORS setup (CORS = the browser's cross-website security rules).
+
+**How a page is made (example: restaurant's "My offers"):**
+1. The browser opens `http://localhost:5173/restaurant`. **React Router** (maps URLs to page components) shows `pages/restaurant/RestaurantHome.jsx`.
+2. That component calls `api.js → GET /api/restaurant/offers`. FastAPI checks the login cookie and role, then returns the offers as JSON.
+3. React draws the list using small components like `<OfferCard>` and `<StatusBadge>`.
+4. **Live updates:** a `usePolling` hook re-fetches every 3 seconds, so you watch the agent's progress without refreshing.
+5. **Buttons** (Accept, Decline, pick a decision option) call `api.js → POST /api/...`, then refresh the data.
+
+**Later, for the demo/deploy:** `npm run build` produces static files in `frontend/dist/`, which FastAPI can serve itself, so one command runs everything (Step 15).
+
+**Every page, by role** (these are React Router URLs; each page reads from matching `/api/...` endpoints):
+
+| Role | Page (URL) | What's on it | Built in step |
+|---|---|---|---|
+| Everyone | `/` | Landing page: what PantryPilot is, Login / Sign up | 1, 3 |
+| Everyone | `/login`, `/signup` | Forms; sign up lets you pick a role | 3 |
+| Restaurant | `/restaurant` | My offers with live status badges, "Post surplus food" button | 5 |
+| Restaurant | `/restaurant/offers/new` | Form: description, quantity, allergens, collect-by time | 5 |
+| Restaurant | `/restaurant/offers/{id}` | Timeline for one offer: which pantry, which driver, the agent's reason in plain words | 5, 8 |
+| Restaurant | `/restaurant/profile` | Name, address | 4 |
+| Pantry | `/pantry` | Incoming deliveries (Accept / Decline), received this week | 10 |
+| Pantry | `/pantry/profile` | Capacity, opening hours, fridge/freezer, dietary restrictions | 4 |
+| Driver | `/driver` | On-duty toggle, new requests (Accept / Decline with reason), my active trip | 10 |
+| Driver | `/driver/trips/{id}` | Pickup and drop-off addresses, "Picked up" and "Delivered" buttons | 10 |
+| Driver | `/driver/profile` | Area, radius, vehicle, weekly availability | 4 |
+| Admin | `/admin` | Overview: stat cards, pending decisions, live activity feed, mini map | 12 |
+| Admin | `/admin/decisions` | **Decisions inbox**: cards with the situation, the agent's reasoning, options (with its recommended one highlighted) and action buttons | 11 |
+| Admin | `/admin/decisions/{id}` | Full card + the agent's full trail for that offer + "remember this" note | 11 |
+| Admin | `/admin/activity` | Timeline of agent runs → tool calls → reasons, filterable by offer/agent | 7, 12 |
+| Admin | `/admin/users`, `/admin/users/{id}` | All restaurants, pantries, drivers, with status and history | 12 |
+| Admin | `/admin/map` | Leaflet map: restaurants, pantries, drivers, active trips | 12 |
+| Admin | `/admin/memory` | What the agent remembers, with delete | 13 |
+| Admin | "Demo scenarios" panel | Trigger-a-hard-case buttons | 11 |
+
+**Look and feel:** clean card-based layout with one colour per role, status badges (grey = posted, blue = agent working, amber = needs human, green = delivered), and it works on a phone-width screen so the driver page feels like an app. Frontend work is spread through the steps above, not left to the end. Step 12 is the visual polish pass.
+
+---
+
+The **separation rule** (also written in code comments):
+- `agents/` = **reasoning**. The AI decides things here.
+- `services/`, `models/`, `auth/`, `worker/` = **deterministic**. Normal code: saving to the database, logins, timers. It never decides *which* pantry or driver.
+- Tools are the bridge. They either **fetch facts** (return data, never a verdict) or **perform an action the agent chose**. Action tools do basic safety validation (e.g. "that pantry id doesn't exist", "that driver is already busy") and hand the error back to the agent, which must rethink.
+
+---
+
+## 5. Database tables
+
+| Table | Key columns | Purpose |
+|---|---|---|
+| `users` | id, email, password_hash, role (`restaurant`/`pantry`/`driver`/`admin`), display_name, created_at | Every login account |
+| `restaurants` | id, user_id, name, address, lat, lon, phone | Donor profile |
+| `pantries` | id, user_id, name, address, lat, lon, capacity_kg_per_day, has_fridge, has_freezer, dietary_restrictions (JSON list, e.g. `["no_pork"]`), opening_hours (JSON), notes | Recipient profile |
+| `drivers` | id, user_id, name, lat, lon, service_radius_km, max_kg, has_cooler, availability (JSON weekly slots), on_duty | Volunteer profile |
+| `offers` | id, restaurant_id, description (free text), quantity_text, pickup_deadline, status, structured_details (JSON from intake agent), agent_summary, created_at, updated_at | One surplus food post |
+| `deliveries` | id, offer_id, pantry_id, driver_id, status, kg, meals, match_reasoning, dispatch_reasoning, timestamps (assigned/picked_up/delivered) | The planned trip for an offer |
+| `dispatch_requests` | id, delivery_id, driver_id, status (`requested`/`accepted`/`declined`/`expired`), decline_reason, sent_at, responded_at | Every ask to a driver (history lets the agent learn "Sam declines evenings") |
+| `decisions` | id, offer_id, kind (`agent_escalation`/`approval_gate`), interrupt_id, interrupt_name, card (JSON), status (`pending`/`answered`/`resumed`/`failed`), chosen_option, admin_note, answered_by, created_at, answered_at | The Decisions inbox, which **survives restarts** |
+| `agent_runs` | id, offer_id, trigger (`new_offer`/`driver_declined`/`pantry_declined`/`timeout`/`admin_decision`), started_at, finished_at, stop_reason, outcome (JSON), error | One row per time the agents woke up |
+| `agent_log` | id, run_id, offer_id, agent_name, event_type (`tool_call`/`tool_result`/`reasoning`/`decision`/`interrupt`/`resumed`/`error`), tool_name, summary, details (JSON), created_at | Human-readable activity timeline |
+| `agent_memory` | id, subject_type (`pantry`/`driver`/`restaurant`), subject_id, fact, source (`agent`/`admin`), created_at, active | Long-term facts ("Riverside can't take pork") |
+| `notifications` | id, user_id, message, link, created_at, read | Messages shown to each user |
+| `app_settings` | key, value | e.g. `supervised_mode` on/off |
+
+**Offer lifecycle:**
+`posted → agent_working → driver_requested → driver_assigned → picked_up → delivered`
+Side paths: `needs_human` (waiting in Decisions inbox) → back to `agent_working`; `expired`; `cancelled`.
+
+---
+
+## 6. The agent team
+
+### Which multi-agent pattern: **Agents-as-Tools** (recommended)
+
+Strands offers three patterns:
+- **Graph**: *you* draw fixed arrows (intake → matching → dispatch). Predictable, but the route is decided by code.
+- **Swarm**: agents hand work to each other freely. Flexible, but hard to follow and hard to debug.
+- **Agents-as-Tools**: one **Coordinator** agent treats each specialist as a tool and decides whom to call, when, and how often.
+
+**Why agents-as-tools fits PantryPilot best:**
+1. **The AI chooses the route, not our code.** If a driver declines, the Coordinator can decide to re-run dispatch, re-run matching with a different pantry, or escalate. With a Graph, those paths would be hard-coded arrows, the "rule engine with an AI sticker" we want to avoid.
+2. **Escalation lives in one place.** Only the Coordinator has the `ask_admin` tool, which matches your brief ("Coordinator decides when a human must be asked").
+3. **Each specialist returns a validated form.** Calling a specialist inside our own `@tool` function lets us use `structured_output_model` and log its reasoning. The Graph docs don't clearly cover structured output per node.
+4. **Easiest for a beginner to read**: one manager plus a few helpers, each in its own file.
+5. **Sessions are simpler.** Only the Coordinator needs a session manager (one per offer). The specialists start fresh each time and read long-term facts through memory tools.
+
+### The four agents
+
+| Agent | Job | Its tools | Returns (Pydantic form) |
+|---|---|---|---|
+| **Intake** | Turn "40 chicken sandwiches, grab by 6, has cheese" into clean data, and flag anything unclear or unsafe | `get_offer`, `get_current_time` | `OfferDetails`: items, est_kg, est_meals, allergens, dietary_tags, perishability, safe_until, concerns, confidence |
+| **Matching** | Choose the best pantry and explain why the others lost | `find_nearby_pantries`, `get_pantry_profile`, `check_pantry_capacity`, `calculate_fairness_score`, `estimate_travel_time`, `recall_facts` | `MatchProposal`: chosen_pantry_id (or none), ranked candidates each with a reason, reasoning, concerns, confident_to_proceed |
+| **Dispatch** | Choose a driver who can get there in time | `get_available_drivers`, `get_driver_history`, `estimate_travel_time`, `recall_facts` | `DispatchPlan`: driver_id (or none), eta_minutes, backup_driver_ids, reasoning, concerns |
+| **Coordinator** (manager) | Run the case end-to-end, commit actions, react to events, decide when a human is needed | `run_intake`, `run_matching`, `run_dispatch` (the specialists), `assign_delivery`, `send_dispatch_request`, `cancel_offer`, `notify_user`, `remember_fact`, `recall_facts`, `ask_admin` | `CaseUpdate`: status, summary, reasoning |
+
+Every action tool takes a required `reason: str` argument, so the agent **must** write why it's acting. That text goes into the log and the UI.
+
+### Tool list (Python functions exposed with `@tool`)
+
+**Fact-finding** (return data only, never a verdict):
+- `get_offer(offer_id)`: offer text, restaurant location, deadline
+- `get_current_time()`: now (AIs don't know the time otherwise)
+- `find_nearby_pantries(lat, lon, radius_km)`: pantries with distance and whether open now or later
+- `get_pantry_profile(pantry_id)`: hours, fridge/freezer, dietary restrictions, notes
+- `check_pantry_capacity(pantry_id)`: capacity today and already received today
+- `calculate_fairness_score(pantry_id, extra_kg)`: this pantry's share of food over the last 7 days, before and after this delivery, compared with the average
+- `get_available_drivers(lat, lon, needed_by)`: on-duty drivers in range, with vehicle info
+- `get_driver_history(driver_id)`: accept/decline stats, including by time of day
+- `estimate_travel_time(from_lat, from_lon, to_lat, to_lon)`: rough minutes
+- `recall_facts(subject_type, subject_id)`: remembered facts
+
+**Actions** (the agent decided; code executes safely):
+- `assign_delivery(offer_id, pantry_id, reason)`
+- `send_dispatch_request(delivery_id, driver_id, reason)`
+- `cancel_offer(offer_id, reason)`
+- `notify_user(user_id, message)`
+- `remember_fact(subject_type, subject_id, fact, reason)`
+- `ask_admin(title, situation, reasoning, options, recommended_option, urgency)`: **raises the interrupt**
+
+---
+
+## 7. How escalation (the interrupt) works, step by step
+
+```mermaid
+sequenceDiagram
+    participant W as Worker (timer)
+    participant R as runner.py
+    participant C as Coordinator agent
+    participant DB as SQLite + session files
+    participant A as Admin (browser)
+
+    W->>R: new offer found → run_case(offer 7)
+    R->>C: "New offer 7. Handle it."
+    C->>C: calls intake, matching, dispatch…
+    C->>C: reasons: "nothing reaches a pantry before it spoils"
+    C->>C: calls ask_admin(card) → tool_context.interrupt()
+    C-->>R: result.stop_reason == "interrupt"
+    R->>DB: save Decision(interrupt_id, card), offer = needs_human
+    Note over DB: Session manager already saved the paused agent to data/sessions/offer-7
+    A->>DB: clicks "Send to shelter with freezer 12 km away"
+    Note over W: (worker may even restart here — nothing is lost)
+    W->>R: answered decision found → resume_case(decision)
+    R->>C: rebuild Coordinator with session "offer-7"
+    R->>C: agent([{"interruptResponse": {"interruptId": id, "response": choice}}])
+    C->>C: ask_admin returns the admin's choice → agent continues
+    C->>DB: assign_delivery, send_dispatch_request…
+```
+
+Key points in plain words:
+1. **The AI decides to escalate.** Its system prompt tells it *when it should consider* asking a human (food safety, time, fairness, missing info). No `if` statement in our code forces it.
+2. **`ask_admin` is a tool with a strict form.** The agent fills in the title, situation, reasoning and 2–4 options, each with consequences, plus its recommendation. Pydantic validates the form, so the card always looks right.
+3. **Pausing = `tool_context.interrupt(...)`.** Strands stops the agent and returns `stop_reason == "interrupt"`.
+4. **Two places remember the pause:** our `decisions` table (for the inbox UI) and Strands' `FileSessionManager` (for the agent's own memory of the conversation and the paused tool call).
+5. **Resuming** rebuilds the Coordinator with the same `session_id` and sends the admin's answer. Inside the paused tool, `interrupt()` now *returns* the answer instead of stopping, and the agent continues.
+6. **Approval gate (second kind of interrupt):** an `ApprovalGateHook` listens to `BeforeToolCallEvent`. When the admin turns on **Supervised mode**, every `assign_delivery` pauses for approval. This is a policy switch a human sets, clearly labelled in code as *deterministic policy, not AI reasoning*. It's off by default.
+7. **Driver/pantry replies are not interrupts.** When a driver declines or doesn't answer in time, the worker simply wakes the Coordinator again with a new message ("Driver Sam declined: car trouble"). Thanks to the session it remembers the whole case.
+
+**"Trigger a hard case"** (`scripts/trigger_hard_case.py --scenario spoilage|no_drivers|fairness|unclear_allergens`, plus a button on the admin dashboard) sets up a situation where a responsible agent *should* escalate. It does **not** force an escalation in code. That's more honest and a better demo. If the agent handles it without asking, the log will show why.
+
+---
+
+## 8. Background execution
+
+- A separate **worker process** (`python -m pantrypilot.worker`) runs APScheduler jobs:
+  - every 15 s: `pick_up_new_offers`: claim `posted` offers → `run_case`
+  - every 10 s: `resume_answered_decisions`
+  - every 30 s: `check_waiting_cases`: expired driver requests, declines, pantry declines, deadlines → wake the Coordinator
+- The web server never runs agents. It only writes to the database.
+- **AWS mapping** (documented in `docs/aws-deployment.md`): APScheduler → **EventBridge Scheduler**; each job → a small **Lambda**; `runner.run_case` → **AgentCore Runtime** entrypoint; SQLite → **RDS Postgres**; session files → **S3SessionManager** or **AgentCore Memory**; tracing → **CloudWatch** via AgentCore observability.
+
+---
+
+## 9. Observability
+
+- **`agent_log` table**: written by `ReasoningLogHook` (tool called, with inputs, result summary, reasoning text) and by `runner.py` (run started, interrupted, resumed, finished). The admin "Agent activity" page reads this.
+- **OpenTelemetry**: `StrandsTelemetry` turned on from `.env` (`OTEL_CONSOLE=true` prints spans; `OTEL_EXPORTER_OTLP_ENDPOINT` sends them to Jaeger if you run it). A "span" is one timed step, like one model call.
+
+---
+
+## 10. Model configuration (`.env`)
+
+```
+MODEL_PROVIDER=anthropic          # anthropic | bedrock | openai
+ANTHROPIC_API_KEY=...
+MODEL_ID=claude-haiku-4-5-20251001  # cheap + fast default
+COORDINATOR_MODEL_ID=               # optional: a stronger model just for the Coordinator
+AWS_REGION=us-east-1                # if bedrock
+OPENAI_API_KEY=...                  # if openai
+```
+
+Exact Bedrock/OpenAI model ids are confirmed in Step 6. Keys are never hard-coded. Tests use a **scripted fake model**, so running `pytest` costs nothing.
+
+---
+
+## 11. Step-by-step build plan
+
+Each step ends with something you can run and see. After each step I list the files, explain them file by file, give the command and the expected result, then **stop and wait for "next"**. Small tests and README updates are added as we go, not saved for the end.
+
+### Phase A — Foundations (no AI yet)
+
+**Step 1 — Project skeleton (backend + React)** ✅ done
+Creates: `LICENSE` (Apache-2.0), `.gitignore`, `requirements.txt` (pinned), `.env.example`, `pantrypilot/config.py`, `pantrypilot/web/main.py` (`GET /api/health`), `frontend/` (Vite + React app that calls the health check), `tests/test_health.py`, starter `README.md`.
+You run: terminal 1 `uvicorn pantrypilot.web.main:app --reload`; terminal 2 `cd frontend; npm run dev`
+You see: `http://localhost:5173` shows the PantryPilot card with "✓ Backend connected".
+
+**Step 2 — Database tables + seed data**
+Creates: `database.py`, `models/*`, `scripts/seed_demo.py`, `scripts/reset_db.py`.
+You run: `python -m scripts.seed_demo`
+You see: a printed summary ("Created 5 restaurants, 7 pantries, 8 drivers, 1 admin…") plus the demo logins, and a `data/pantrypilot.db` file.
+
+**Step 3 — Signup, login, four roles**
+Creates: backend `auth/*`, `web/routes/auth.py` (`/api/auth/signup`, `/login`, `/logout`, `/me`); frontend React Router, `auth/` login state + role guards, `Layout` component, Login/Signup pages, an empty home page per role.
+You see: open 4 browser profiles, sign up as each role, and each lands on its own dashboard. Opening another role's page is refused. Seeded demo accounts can log in too.
+
+**Step 4 — Profiles**
+Backend profile endpoints + React profile forms. Pantry: capacity, hours, fridge, dietary restrictions. Driver: area, availability, on-duty toggle. Restaurant: address.
+You see: edit, save, refresh, and the values persist.
+
+**Step 5 — Restaurant posts an offer**
+Creates: offer API endpoints, React offer form, "My offers" page with live status (`usePolling` refresh every few seconds, `StatusBadge` component), a basic admin offers list.
+You see: post "40 sandwiches, contains dairy, collect by 18:00" and it appears with status `posted` for both the restaurant and the admin.
+
+### Phase B — The agents
+
+**Step 6 — First agent, read-only tools, structured output**
+Creates: `agents/model_provider.py`, `agents/schemas.py`, fact-finding tools, `matching_agent.py`, `scripts/try_matching.py`.
+You run: `python -m scripts.try_matching --offer 1`
+You see: in the terminal, each tool the agent chose to call, then a validated `MatchProposal` with its written reasoning. Nothing is written to the database yet.
+*I explain: `@tool`, `Agent`, system prompts, `structured_output_model`.*
+
+**Step 7 — Hooks + activity log**
+Creates: `hooks/reasoning_log_hook.py`, `agent_runs`/`agent_log` writes, admin "Agent activity" page (basic timeline).
+You see: rerun the script, then open the admin page and see the timeline of tool calls and reasons.
+*I explain: hooks and lifecycle events.*
+
+**Step 8 — The full agent team (agents-as-tools)**
+Creates: `intake_agent.py`, `dispatch_agent.py`, `coordinator_agent.py`, action tools, `runner.py` (`run_case`), `scripts/run_agent_once.py`.
+You run: `python -m scripts.run_agent_once --offer 1`
+You see: the offer moves to `driver_requested`, the restaurant page shows the chosen pantry and reason, and the driver's page shows a request.
+*I explain: multi-agent orchestration and why the Coordinator picks the route.*
+
+**Step 9 — Background scheduler (no button needed)**
+Creates: `worker/__main__.py`, `worker/jobs.py`.
+You run: terminal 1 = web server, terminal 2 = `python -m pantrypilot.worker`
+You see: post an offer in the browser, touch nothing, and within ~15 seconds its status changes by itself while the activity log fills up.
+
+**Step 10 — Driver + pantry flows, and sessions**
+Creates: driver accept/decline/picked-up/delivered buttons; pantry accept/decline of incoming deliveries; `agents/sessions.py` (`FileSessionManager` per offer); worker wakes the Coordinator on declines and timeouts.
+You see: **the full happy path in 4 windows**: post → agent matches → driver accepts → picked up → delivered. Also: decline as a driver and watch the agent re-plan, remembering the case.
+*I explain: sessions.*
+
+### Phase C — Human in the loop
+
+**Step 11 — Interrupts + Decisions inbox**
+Creates: `human_tools.ask_admin`, `hooks/approval_gate_hook.py`, decision saving/resuming in `runner.py`, resume job, the **Decisions inbox** UI (the showpiece), Supervised-mode toggle, `scripts/trigger_hard_case.py` + admin button.
+You see: trigger "spoilage", a decision card appears with reasoning and options, you pick one, and within seconds the agent resumes and finishes. **Restart test:** stop the worker while a decision is pending, answer it, start the worker again, and it still resumes correctly.
+*I explain: interrupts, and why the pause survives restarts.*
+⚠️ This is the riskiest step. I'll first write a tiny test proving "interrupt → restart → resume" works with `FileSessionManager` in 1.55.1, *before* building the UI on top of it.
+
+### Phase D — Dashboard, memory, polish
+
+**Step 12 — Admin dashboard**
+Overview cards (active offers, in-progress, completed today, kg / meals saved, pending decisions), users list + detail pages, polished activity timeline, map of restaurants/pantries/drivers/active deliveries.
+You see: a real dashboard that updates while the demo runs.
+
+**Step 13 — Long-term memory + tracing**
+Creates: `memory_tools` (`remember_fact`/`recall_facts`, after evaluating Strands' native `MemoryManager`), admin "What the agent remembers" page with delete; admin can add "remember this" when answering a decision; `agents/telemetry.py`.
+You see: tell the agent (via a decision note) "Riverside can't take pork", then on the next pork offer its reasoning cites that fact. Trace spans print in the terminal when `OTEL_CONSOLE=true`.
+
+### Phase E — Proof and presentation
+
+**Step 14 — Tests**
+Tool tests (distance, capacity, fairness), auth tests, and an **escalation flow test** with a scripted fake model (interrupt → decision row → resume → delivery assigned).
+You run: `pytest` → all green, no API cost.
+
+**Step 15 — Docs + deployment path**
+`README.md` (problem, users, screenshots, quickstart, **"Strands features we used and where"** with file links), `docs/architecture.md` + Mermaid diagram, `docs/aws-deployment.md` + `deploy/agentcore_app.py` stub, `docs/demo-script.md` (5-minute shot list with one escalation).
+You see: a fresh-clone quickstart that runs the whole demo from scratch.
+
+---
+
+## 12. Known risks I'll watch
+
+- **Interrupt restore after restart**: verified with a test at the start of Step 11.
+- **Parallel tool calls**: the Coordinator could fire two action tools at once. I'll set it to run tools one at a time (sequential tool executor, name confirmed in Step 8).
+- **Cheap model quality**: Haiku may occasionally reason poorly on hard cases. The `COORDINATOR_MODEL_ID` setting lets you use a stronger model for the manager only.
+- **SQLite with two processes** (web + worker): turn on WAL mode (a SQLite setting that lets reads and writes overlap safely).
+- **Windows**: commands in the README are given for PowerShell. Activating a venv may need `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+---
+
+## 13. Open questions for you
+
+1. **AI provider**: which do you have access to: an Anthropic API key, AWS Bedrock, or OpenAI? (Default plan: Anthropic with Claude Haiku 4.5.)
+2. **Multi-agent pattern**: OK with **Agents-as-Tools** (Coordinator + 3 specialists), or would you prefer a Graph?
+3. **Worker process**: OK to run the agent worker as a **second terminal** (clearer, and matches how AWS would run it)? The alternative is running it inside the web server (one command, but muddier).
+4. ~~Live updates: HTMX?~~ **Decided:** React frontend (plain JavaScript) with polling via a `usePolling` hook.
+5. **Pantry acceptance timing**: dispatch the driver **at the same time** as asking the pantry (faster for perishable food; if the pantry declines, the agent re-plans)? Or wait for the pantry to accept first?
+6. **Supervised mode**: happy to have the admin-toggleable approval gate in addition to the agent's own escalations?
+7. **Demo city**: which city should the fake world be set in (e.g. Seattle, Bengaluru, London)?
+8. **Map**: Leaflet + OpenStreetMap needs internet during the demo. OK, or would you rather have a simple offline diagram?
+9. **Git**: shall I make a git commit at the end of each step (LICENSE in the first commit)?
