@@ -365,11 +365,10 @@ You see: post "40 sandwiches, contains dairy, collect by 18:00" and it appears w
 
 ### Phase B — The agents
 
-**Step 6 — First agent, read-only tools, structured output**
-Creates: `agents/model_provider.py`, `agents/schemas.py`, fact-finding tools, `matching_agent.py`, `scripts/try_matching.py`.
-You run: `python -m scripts.try_matching --offer 1`
+**Step 6 — First agent, read-only tools, structured output** ✅ built, ⏳ awaiting your GROQ_API_KEY to test live
+Creates: `services/geo.py` (haversine distance, travel-time estimate, `is_open_now`), `services/fairness.py`, `agents/model_provider.py` (Groq/Anthropic/Bedrock/OpenAI, chosen from `.env` — **decided: Groq free tier, model `openai/gpt-oss-120b`**, via Strands' OpenAI-compatible model class), `agents/schemas.py` (`MatchProposal`), `agents/tools/*` (offer/pantry/geo/memory fact-finding tools), `agents/matching_agent.py`, `scripts/try_matching.py`. 58 tests pass without needing any API key (pure logic + "does the right error appear" checks).
+You run: add your key to `.env` (`GROQ_API_KEY=...`), then `python -m scripts.try_matching --offer 1`
 You see: in the terminal, each tool the agent chose to call, then a validated `MatchProposal` with its written reasoning. Nothing is written to the database yet.
-*I explain: `@tool`, `Agent`, system prompts, `structured_output_model`.*
 
 **Step 7 — Hooks + activity log**
 Creates: `hooks/reasoning_log_hook.py`, `agent_runs`/`agent_log` writes, admin "Agent activity" page (basic timeline).

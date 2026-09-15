@@ -52,7 +52,13 @@ Run the tests with `pytest`.
 
 ## Which Strands features we used and where
 
-*Filled in as each feature is built (Steps 6–13).*
+| Feature | Where | What it does here |
+|---|---|---|
+| `@tool` decorator | [`pantrypilot/agents/tools/`](pantrypilot/agents/tools/) | Exposes plain Python functions (distance checks, database lookups) as things the agent can choose to call. |
+| `structured_output_model` | [`agents/schemas.py`](pantrypilot/agents/schemas.py), [`agents/matching_agent.py`](pantrypilot/agents/matching_agent.py) | Forces the Matching agent's decision into a validated `MatchProposal` (Pydantic) instead of loose prose. |
+| Model providers | [`agents/model_provider.py`](pantrypilot/agents/model_provider.py) | Builds the model from `.env` — Groq (`openai/gpt-oss-120b`, via Strands' `OpenAIModel` pointed at Groq's URL), Anthropic, Bedrock or OpenAI, chosen with one setting. |
+
+*More arrives with multi-agent orchestration (Step 8), interrupts (Step 11), hooks, sessions, and tracing (Steps 7, 10, 13).*
 
 ## License
 

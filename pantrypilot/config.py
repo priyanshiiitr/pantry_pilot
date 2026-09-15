@@ -40,11 +40,16 @@ class Settings(BaseSettings):
     city_timezone: str = "America/Los_Angeles"
 
     # --- AI model (used from Step 6) ---
-    model_provider: str = "anthropic"
-    model_id: str = ""
+    # model_provider is one of: "anthropic" | "bedrock" | "openai" | "groq".
+    # Groq isn't a separate Strands feature — it speaks the same API shape as OpenAI,
+    # so we reuse Strands' OpenAIModel and just point it at Groq's URL. See
+    # pantrypilot/agents/model_provider.py.
+    model_provider: str = "groq"
+    model_id: str = "openai/gpt-oss-120b"
     coordinator_model_id: str = ""
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    groq_api_key: str = ""
     aws_region: str = "us-east-1"
 
     # --- Tracing (used from Step 13) ---
