@@ -53,6 +53,8 @@ def get_pantry_profile(pantry_id: int) -> dict:
             "pantry_id": pantry.id,
             "name": pantry.name,
             "address": pantry.address,
+            "lat": pantry.lat,
+            "lon": pantry.lon,
             "has_fridge": pantry.has_fridge,
             "has_freezer": pantry.has_freezer,
             "dietary_restrictions": pantry.dietary_restrictions,

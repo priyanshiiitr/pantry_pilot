@@ -365,10 +365,12 @@ You see: post "40 sandwiches, contains dairy, collect by 18:00" and it appears w
 
 ### Phase B — The agents
 
-**Step 6 — First agent, read-only tools, structured output** ✅ built, ⏳ awaiting your GROQ_API_KEY to test live
-Creates: `services/geo.py` (haversine distance, travel-time estimate, `is_open_now`), `services/fairness.py`, `agents/model_provider.py` (Groq/Anthropic/Bedrock/OpenAI, chosen from `.env` — **decided: Groq free tier, model `openai/gpt-oss-120b`**, via Strands' OpenAI-compatible model class), `agents/schemas.py` (`MatchProposal`), `agents/tools/*` (offer/pantry/geo/memory fact-finding tools), `agents/matching_agent.py`, `scripts/try_matching.py`. 58 tests pass without needing any API key (pure logic + "does the right error appear" checks).
-You run: add your key to `.env` (`GROQ_API_KEY=...`), then `python -m scripts.try_matching --offer 1`
-You see: in the terminal, each tool the agent chose to call, then a validated `MatchProposal` with its written reasoning. Nothing is written to the database yet.
+**Step 6 — First agent, read-only tools, structured output** ✅ done, verified live against Groq
+Creates: `services/geo.py` (haversine distance, travel-time estimate, `is_open_now`), `services/fairness.py`, `agents/model_provider.py` (Groq/Anthropic/Bedrock/OpenAI, chosen from `.env` — **decided: Groq free tier, model `openai/gpt-oss-120b`**, via Strands' OpenAI-compatible model class), `agents/schemas.py` (`MatchProposal`), `agents/tools/*` (offer/pantry/geo/memory fact-finding tools), `agents/matching_agent.py`, `agents/console.py` (fixes a Windows console Unicode crash — see below), `scripts/try_matching.py`. 58 tests pass without needing any API key.
+You run: `python -m scripts.try_matching --offer <id>`
+You see: in the terminal, each tool the agent chose to call, its live reasoning, then a validated `MatchProposal`. Confirmed live: the agent correctly ruled out pantries for missing fridges, halal-only conflicts, and being closed at arrival time, and correctly caught a genuinely-passed pickup deadline, returning `chosen_pantry_id: null, confident_to_proceed: false` with clear concerns for a human — exactly the shape Step 11's escalation will consume. Nothing is written to the database yet.
+
+**Gotcha found and fixed:** on Windows, the model occasionally emits Unicode characters (narrow spaces, smart punctuation) that the default console encoding (cp1252) can't print. Strands' live-streaming callback would crash mid-print, and the surrounding retry logic silently re-ran the whole model call — which looked exactly like an infinite reasoning loop until diagnosed. Fixed once in `agents/console.py`; every future entrypoint that runs an agent must call `ensure_utf8_console()` at startup.
 
 **Step 7 — Hooks + activity log**
 Creates: `hooks/reasoning_log_hook.py`, `agent_runs`/`agent_log` writes, admin "Agent activity" page (basic timeline).
@@ -428,6 +430,7 @@ You see: a fresh-clone quickstart that runs the whole demo from scratch.
 - **Cheap model quality**: Haiku may occasionally reason poorly on hard cases. The `COORDINATOR_MODEL_ID` setting lets you use a stronger model for the manager only.
 - **SQLite with two processes** (web + worker): turn on WAL mode (a SQLite setting that lets reads and writes overlap safely).
 - **Windows**: commands in the README are given for PowerShell. Activating a venv may need `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+- **Windows console + Unicode** (found in Step 6): the default terminal encoding can't print some characters the model generates, crashing any script that streams agent output live. Fixed via `agents/console.py`'s `ensure_utf8_console()` — call it at the top of every new script/worker entrypoint that runs an agent.
 
 ---
 
