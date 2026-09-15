@@ -24,7 +24,7 @@ You need **Python 3.11+** and **Node.js 20+**.
 python -m venv .venv
 .venv\Scripts\Activate.ps1            # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 pip install -r requirements.txt
-copy .env.example .env
+copy .env.example .env                # then add your GROQ_API_KEY (or another provider's) — see .env.example
 python -m scripts.seed_demo --reset   # build the demo Seattle world (all passwords: demo1234)
 python -m scripts.show_db             # optional: see what's in the database
 uvicorn pantrypilot.web.main:app --reload
@@ -33,6 +33,10 @@ uvicorn pantrypilot.web.main:app --reload
 cd frontend
 npm install
 npm run dev
+
+# 3. Background agent worker — in a third terminal (this is what makes it agentic:
+#    it wakes up on its own, no button click)
+python -m pantrypilot.worker
 ```
 
 Open **http://localhost:5173**. Sign up, or log in with any seeded account (e.g. `hope@pantrypilot.test` /
@@ -60,6 +64,7 @@ Run the tests with `pytest`.
 | Hooks | [`agents/hooks/reasoning_log_hook.py`](pantrypilot/agents/hooks/reasoning_log_hook.py) | Listens for `BeforeToolCallEvent`/`AfterToolCallEvent` and writes every tool call, its input and its result into the `agent_log` table — the admin "Agent activity" timeline reads this. |
 | Multi-agent (agents-as-tools) | [`agents/coordinator_agent.py`](pantrypilot/agents/coordinator_agent.py) | A Coordinator agent treats Intake, Matching and Dispatch as tools it can call in whatever order and however many times it decides — not a fixed pipeline. It also decides whether to commit, retry, or flag the case for a human. |
 | Structured output (more) | [`agents/schemas.py`](pantrypilot/agents/schemas.py) | `OfferDetails`, `DispatchPlan`, `CaseUpdate` — every specialist's answer is a validated Pydantic object. |
+| Background execution | [`worker/`](pantrypilot/worker/README.md) | An APScheduler timer (not a request handler) wakes the agent team up on its own every 15 seconds — nobody has to click a button. |
 
 *More arrives with interrupts (Step 11), sessions, and tracing (Steps 10, 13).*
 

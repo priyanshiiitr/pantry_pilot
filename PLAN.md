@@ -383,10 +383,10 @@ You run: `python -m scripts.run_agent_once --offer <id>`
 You see: the offer moves through `agent_working` → `driver_requested` (or `needs_human`/`cancelled` if the Coordinator can't safely proceed), the restaurant's offer detail page shows the agent's summary, and a delivery + dispatch request are visible in the database (their own dashboard pages arrive in Step 10).
 **Bugs caught and fixed along the way**: a `send_dispatch_request` autoflush-ordering issue (adding a new row to the session before touching a lazy-loaded relationship it's linked to), and a latent "newest first" tie-breaking bug across four different queries — `order_by(created_at.desc())` alone isn't deterministic when two rows are created within the same timestamp resolution window; fixed by adding `id.desc()` as a secondary sort key everywhere `created_at` was used as a sole sort key.
 
-**Step 9 — Background scheduler (no button needed)**
-Creates: `worker/__main__.py`, `worker/jobs.py`.
+**Step 9 — Background scheduler (no button needed)** ✅ done
+Creates: `worker/__main__.py` (APScheduler `BlockingScheduler`, creates tables on startup so a brand-new database works with no separate migrate step), `worker/jobs.py` (`pick_up_new_offers`: finds every `posted` offer and runs the full agent team on it; one offer failing never blocks the rest).
 You run: terminal 1 = web server, terminal 2 = `python -m pantrypilot.worker`
-You see: post an offer in the browser, touch nothing, and within ~15 seconds its status changes by itself while the activity log fills up.
+You see: post an offer in the browser, touch nothing, and within 15 seconds its status flips to `agent_working` by itself — **verified live**: started the worker against a fresh database with one posted offer, and it claimed it (status `posted` → `agent_working`, `claimed_at` set) with zero manual intervention. The offer/activity log pages (already polling since Steps 5/7) pick up every subsequent change automatically — no new frontend work was needed for this step.
 
 **Step 10 — Driver + pantry flows, and sessions**
 Creates: driver accept/decline/picked-up/delivered buttons; pantry accept/decline of incoming deliveries; `agents/sessions.py` (`FileSessionManager` per offer); worker wakes the Coordinator on declines and timeouts.
