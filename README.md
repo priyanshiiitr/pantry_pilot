@@ -58,8 +58,10 @@ Run the tests with `pytest`.
 | `structured_output_model` | [`agents/schemas.py`](pantrypilot/agents/schemas.py), [`agents/matching_agent.py`](pantrypilot/agents/matching_agent.py) | Forces the Matching agent's decision into a validated `MatchProposal` (Pydantic) instead of loose prose. |
 | Model providers | [`agents/model_provider.py`](pantrypilot/agents/model_provider.py) | Builds the model from `.env` — Groq (`openai/gpt-oss-120b`, via Strands' `OpenAIModel` pointed at Groq's URL), Anthropic, Bedrock or OpenAI, chosen with one setting. |
 | Hooks | [`agents/hooks/reasoning_log_hook.py`](pantrypilot/agents/hooks/reasoning_log_hook.py) | Listens for `BeforeToolCallEvent`/`AfterToolCallEvent` and writes every tool call, its input and its result into the `agent_log` table — the admin "Agent activity" timeline reads this. |
+| Multi-agent (agents-as-tools) | [`agents/coordinator_agent.py`](pantrypilot/agents/coordinator_agent.py) | A Coordinator agent treats Intake, Matching and Dispatch as tools it can call in whatever order and however many times it decides — not a fixed pipeline. It also decides whether to commit, retry, or flag the case for a human. |
+| Structured output (more) | [`agents/schemas.py`](pantrypilot/agents/schemas.py) | `OfferDetails`, `DispatchPlan`, `CaseUpdate` — every specialist's answer is a validated Pydantic object. |
 
-*More arrives with multi-agent orchestration (Step 8), interrupts (Step 11), sessions, and tracing (Steps 10, 13).*
+*More arrives with interrupts (Step 11), sessions, and tracing (Steps 10, 13).*
 
 ## License
 

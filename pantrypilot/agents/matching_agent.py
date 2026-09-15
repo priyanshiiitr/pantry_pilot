@@ -54,14 +54,24 @@ def build_matching_agent(model: Model | None = None, hooks: list[HookProvider] |
     )
 
 
-def propose_match(offer_id: int, model: Model | None = None, trigger: str = RunTrigger.MANUAL) -> MatchProposal:
+def propose_match(
+    offer_id: int, model: Model | None = None, trigger: str = RunTrigger.MANUAL, run_id: int | None = None
+) -> MatchProposal:
     """Run the Matching agent on one offer and return its structured decision.
 
     Every tool call is recorded in the agent_log table via ReasoningLogHook, and
     the run itself is recorded in agent_runs — this is what the admin "Agent
     activity" page reads (see web/routes/admin.py).
+
+    Pass `run_id` when calling this from inside another agent run (see
+    coordinator_agent.py) so every log line nests under the same agent_runs row.
+    Standalone callers (e.g. scripts/try_matching.py) leave it out and get their
+    own run.
     """
-    run_id = start_agent_run(trigger=trigger, offer_id=offer_id)
+    owns_run = run_id is None
+    if owns_run:
+        run_id = start_agent_run(trigger=trigger, offer_id=offer_id)
+
     hook = ReasoningLogHook(run_id=run_id, offer_id=offer_id, agent_name="matching")
     agent = build_matching_agent(model, hooks=[hook])
 
@@ -72,10 +82,12 @@ def propose_match(offer_id: int, model: Model | None = None, trigger: str = RunT
             structured_output_model=MatchProposal,
         )
     except Exception as error:
-        finish_agent_run(run_id, stop_reason="error", error=str(error))
+        if owns_run:
+            finish_agent_run(run_id, stop_reason="error", error=str(error))
         raise
 
     proposal = result.structured_output
     log_event(run_id, offer_id, "matching", "decision", proposal.reasoning, details=proposal.model_dump())
-    finish_agent_run(run_id, stop_reason=result.stop_reason, outcome=proposal.model_dump())
+    if owns_run:
+        finish_agent_run(run_id, stop_reason=result.stop_reason, outcome=proposal.model_dump())
     return proposal

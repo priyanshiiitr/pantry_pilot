@@ -1,9 +1,7 @@
-"""Reading long-term facts the agents (or an admin) have recorded before.
+"""Reading and writing long-term facts the agents (or an admin) have recorded before.
 
-Only reading is wired up in Step 6 — `remember_fact` (writing a new fact) arrives
-as an action tool once the Coordinator exists in Step 8, and gets a real UI in
-Step 13. The agent_memory table already exists (see models/agent_records.py), so
-there's nothing stopping recall from working today, even while it's always empty.
+A real "What the agent remembers" admin page, with delete, arrives in Step 13 —
+for now, remember_fact just saves a row, and recall_facts reads it back.
 """
 
 from sqlalchemy import select
@@ -36,3 +34,21 @@ def recall_facts(subject_type: str, subject_id: int) -> list[dict]:
         return [
             {"fact": fact.fact, "source": fact.source, "created_at": fact.created_at.isoformat()} for fact in facts
         ]
+
+
+@tool
+def remember_fact(subject_type: str, subject_id: int, fact: str, reason: str) -> dict:
+    """Save a fact worth remembering for future offers, e.g. "Riverside Food Bank
+    is temporarily closed for renovation" or "Driver Sam declines evening runs."
+
+    Args:
+        subject_type: one of "pantry", "driver", "restaurant".
+        subject_id: the id of that pantry/driver/restaurant.
+        fact: the fact itself, written plainly.
+        reason: why you're recording this now (shown alongside the fact later).
+    """
+    with database.SessionLocal() as session:
+        entry = AgentMemory(subject_type=subject_type, subject_id=subject_id, fact=fact, source="agent")
+        session.add(entry)
+        session.commit()
+        return {"id": entry.id, "saved": True, "reason": reason}

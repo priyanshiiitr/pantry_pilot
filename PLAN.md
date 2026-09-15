@@ -377,11 +377,11 @@ Creates: `services/activity_log.py` (deterministic: `start_agent_run`/`finish_ag
 **Also fixed a real test-isolation bug**: agent tools/services open their own `SessionLocal()` — a plain `from ... import SessionLocal` freezes the real database at import time, so tests couldn't swap in a temp one. Switched every such module to `from pantrypilot import database` + `database.SessionLocal()`, and the `db_session` test fixture now monkeypatches `pantrypilot.database.SessionLocal` to match.
 You see: rerun `try_matching.py`, then open `/admin/activity` and see the timeline of tool calls, results and the final decision, newest first, refreshing live.
 
-**Step 8 — The full agent team (agents-as-tools)**
-Creates: `intake_agent.py`, `dispatch_agent.py`, `coordinator_agent.py`, action tools, `runner.py` (`run_case`), `scripts/run_agent_once.py`.
-You run: `python -m scripts.run_agent_once --offer 1`
-You see: the offer moves to `driver_requested`, the restaurant page shows the chosen pantry and reason, and the driver's page shows a request.
-*I explain: multi-agent orchestration and why the Coordinator picks the route.*
+**Step 8 — The full agent team (agents-as-tools)** ✅ done
+Creates: `agents/schemas.py` additions (`OfferDetails`, `DispatchPlan`, `CaseUpdate`), `intake_agent.py`, `dispatch_agent.py` (+ `agents/tools/driver_tools.py`), `coordinator_agent.py` (agents-as-tools: `run_intake`/`run_matching`/`run_dispatch` as closures bound to one offer+run), `agents/tools/action_tools.py` (`assign_delivery`, `send_dispatch_request`, `flag_needs_human`, `cancel_offer`, `notify_user` — also closures, so the model never has to get an `offer_id` right by itself), `services/offers.py`/`services/notifications.py` additions, `runner.py` (`run_case` — the one entry point), `scripts/run_agent_once.py`. 84 tests pass.
+You run: `python -m scripts.run_agent_once --offer <id>`
+You see: the offer moves through `agent_working` → `driver_requested` (or `needs_human`/`cancelled` if the Coordinator can't safely proceed), the restaurant's offer detail page shows the agent's summary, and a delivery + dispatch request are visible in the database (their own dashboard pages arrive in Step 10).
+**Bugs caught and fixed along the way**: a `send_dispatch_request` autoflush-ordering issue (adding a new row to the session before touching a lazy-loaded relationship it's linked to), and a latent "newest first" tie-breaking bug across four different queries — `order_by(created_at.desc())` alone isn't deterministic when two rows are created within the same timestamp resolution window; fixed by adding `id.desc()` as a secondary sort key everywhere `created_at` was used as a sole sort key.
 
 **Step 9 — Background scheduler (no button needed)**
 Creates: `worker/__main__.py`, `worker/jobs.py`.

@@ -76,4 +76,5 @@ def log_event(
 
 def list_recent_log_entries(session: Session, limit: int = 200) -> list[AgentLog]:
     """Return the most recent activity log entries, newest first. Used by the admin dashboard."""
-    return list(session.scalars(select(AgentLog).order_by(AgentLog.created_at.desc()).limit(limit)))
+    query = select(AgentLog).order_by(AgentLog.created_at.desc(), AgentLog.id.desc()).limit(limit)
+    return list(session.scalars(query))
