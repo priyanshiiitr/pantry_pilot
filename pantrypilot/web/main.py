@@ -1,9 +1,5 @@
 """The FastAPI web server — the backend API that the React frontend talks to.
 
-Right now it only has a health-check endpoint, so we can prove the frontend and
-backend are connected. Later steps add routers for login, restaurants, pantries,
-drivers and the admin dashboard.
-
 DETERMINISTIC CODE: no AI reasoning ever happens in the web server. It only reads
 and writes the database. The agents run separately in the background worker.
 
@@ -14,8 +10,11 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
 
 from pantrypilot.config import settings
+from pantrypilot.database import create_tables
+from pantrypilot.web.routes import admin, auth, driver, pantry, restaurant
 
 
 class HealthResponse(BaseModel):
@@ -36,13 +35,26 @@ def health() -> HealthResponse:
 
 
 def create_app() -> FastAPI:
-    """Build the FastAPI application and attach all its endpoints.
+    """Build the FastAPI application: create tables, add the login-cookie
+    middleware, and attach every router of API endpoints."""
+    # Safe to call every time the app starts: it only creates tables that don't
+    # exist yet, so a fresh clone works with no separate "migrate" step.
+    create_tables()
 
-    Every backend URL starts with /api. The React dev server forwards (proxies)
-    anything under /api to this backend, so both look like one website to the browser.
-    """
     app = FastAPI(title=settings.app_name, version="0.1.0")
+
+    # SessionMiddleware turns request.session (a plain dict) into a signed cookie
+    # in the browser. "Signed" means the browser can't edit it without the change
+    # being detected, because it's signed with session_secret from .env.
+    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, session_cookie="pantrypilot_session")
+
     app.add_api_route("/api/health", health, methods=["GET"], response_model=HealthResponse)
+    app.include_router(auth.router)
+    app.include_router(restaurant.router)
+    app.include_router(pantry.router)
+    app.include_router(driver.router)
+    app.include_router(admin.router)
+
     return app
 
 

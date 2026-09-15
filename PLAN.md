@@ -351,16 +351,16 @@ Creates: `database.py`, `models/*` (users, places, offers, agent_records, system
 You run: `python -m scripts.seed_demo --reset` then `python -m scripts.show_db`
 You see: a printed summary (5 restaurants, 7 pantries, 8 drivers, 1 admin, 14 past deliveries) plus the demo logins, and a `data/pantrypilot.db` file.
 
-**Step 3 — Signup, login, four roles**
-Creates: backend `auth/*`, `web/routes/auth.py` (`/api/auth/signup`, `/login`, `/logout`, `/me`); frontend React Router, `auth/` login state + role guards, `Layout` component, Login/Signup pages, an empty home page per role.
-You see: open 4 browser profiles, sign up as each role, and each lands on its own dashboard. Opening another role's page is refused. Seeded demo accounts can log in too.
+**Step 3 — Signup, login, four roles** ✅ done
+Creates: backend `auth/current_user.py` (session dependency + role guard), `services/accounts.py`, `web/schemas.py`, `web/routes/auth.py` (`/api/auth/signup`, `/login`, `/logout`, `/me`), `SessionMiddleware` in `web/main.py`; frontend `react-router-dom`, `auth/AuthContext.jsx` + `RequireRole.jsx`, `components/Layout.jsx`, Login/Signup pages, a placeholder home page per role.
+You see: open 4 browser profiles, sign up as each role, and each lands on its own dashboard. Typing another role's URL bounces you back to your own. Seeded demo accounts (password `demo1234`) can log in too.
 
-**Step 4 — Profiles**
-Backend profile endpoints + React profile forms. Pantry: capacity, hours, fridge, dietary restrictions. Driver: area, availability, on-duty toggle. Restaurant: address.
-You see: edit, save, refresh, and the values persist.
+**Step 4 — Profiles** ✅ done
+Creates: backend `services/profiles.py`, profile GET/PUT on each role's router, hours/dietary-tag validators in `web/schemas.py`; frontend `hooks/useProfileForm.js`, `components/WeeklyHoursEditor.jsx` (shared by pantry hours + driver availability), three profile pages.
+You see: edit capacity/hours/fridge/dietary restrictions (pantry), area/availability/on-duty (driver), or address (restaurant); save, refresh, values persist. Bad input (unknown dietary tag, closing time before opening time, out-of-range latitude) is rejected with a clear message.
 
-**Step 5 — Restaurant posts an offer**
-Creates: offer API endpoints, React offer form, "My offers" page with live status (`usePolling` refresh every few seconds, `StatusBadge` component), a basic admin offers list.
+**Step 5 — Restaurant posts an offer** ✅ done
+Creates: backend `services/offers.py`, offer schemas + validators (deadline must be future, non-blank fields), `/api/restaurant/offers` (create/list/get), `/api/admin/offers` (list-all); frontend `hooks/usePolling.js`, `components/StatusBadge.jsx`, `NewOffer`/`OfferDetail` pages, live-updating restaurant home, basic admin offers table.
 You see: post "40 sandwiches, contains dairy, collect by 18:00" and it appears with status `posted` for both the restaurant and the admin.
 
 ### Phase B — The agents

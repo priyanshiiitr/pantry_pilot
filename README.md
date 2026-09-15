@@ -35,7 +35,9 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**. You should see "✓ Backend connected".
+Open **http://localhost:5173**. Sign up, or log in with any seeded account (e.g. `hope@pantrypilot.test` /
+`demo1234` for a pantry, `admin@pantrypilot.test` for the admin view). A restaurant account can post a
+surplus food offer and watch its status live; the admin account sees every offer posted.
 
 Run the tests with `pytest`.
 

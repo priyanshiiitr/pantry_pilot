@@ -8,13 +8,14 @@ Key ideas (in plain words):
 - Every table class (in pantrypilot/models/) inherits from `Base`.
 """
 
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import DateTime, create_engine, event
 from sqlalchemy.engine import Dialect, Engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.types import TypeDecorator
 
 from pantrypilot.config import settings
@@ -112,3 +113,17 @@ def drop_tables(target_engine: Engine | None = None) -> None:
     import pantrypilot.models  # noqa: F401
 
     Base.metadata.drop_all(target_engine or engine)
+
+
+def get_db() -> Iterator[Session]:
+    """FastAPI dependency that hands a route one database session and closes it after.
+
+    Usage in a route: `db: Session = Depends(get_db)`.
+    Tests replace this with a temporary database via `app.dependency_overrides[get_db]`,
+    so running the test suite never touches the real data/pantrypilot.db file.
+    """
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
