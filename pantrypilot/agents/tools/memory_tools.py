@@ -9,7 +9,7 @@ there's nothing stopping recall from working today, even while it's always empty
 from sqlalchemy import select
 from strands import tool
 
-from pantrypilot.database import SessionLocal
+from pantrypilot import database
 from pantrypilot.models import AgentMemory
 
 
@@ -25,7 +25,7 @@ def recall_facts(subject_type: str, subject_id: int) -> list[dict]:
         subject_type: one of "pantry", "driver", "restaurant".
         subject_id: the id of that pantry/driver/restaurant.
     """
-    with SessionLocal() as session:
+    with database.SessionLocal() as session:
         facts = session.scalars(
             select(AgentMemory).where(
                 AgentMemory.subject_type == subject_type,

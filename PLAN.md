@@ -372,10 +372,10 @@ You see: in the terminal, each tool the agent chose to call, its live reasoning,
 
 **Gotcha found and fixed:** on Windows, the model occasionally emits Unicode characters (narrow spaces, smart punctuation) that the default console encoding (cp1252) can't print. Strands' live-streaming callback would crash mid-print, and the surrounding retry logic silently re-ran the whole model call — which looked exactly like an infinite reasoning loop until diagnosed. Fixed once in `agents/console.py`; every future entrypoint that runs an agent must call `ensure_utf8_console()` at startup.
 
-**Step 7 — Hooks + activity log**
-Creates: `hooks/reasoning_log_hook.py`, `agent_runs`/`agent_log` writes, admin "Agent activity" page (basic timeline).
-You see: rerun the script, then open the admin page and see the timeline of tool calls and reasons.
-*I explain: hooks and lifecycle events.*
+**Step 7 — Hooks + activity log** ✅ done
+Creates: `services/activity_log.py` (deterministic: `start_agent_run`/`finish_agent_run`/`log_event`/`list_recent_log_entries`), `agents/hooks/reasoning_log_hook.py` (`ReasoningLogHook`, a `HookProvider` listening for `BeforeToolCallEvent`/`AfterToolCallEvent`), wired into `matching_agent.propose_match()`; `/api/admin/activity`; frontend `ActivityLog.jsx` page + nav link.
+**Also fixed a real test-isolation bug**: agent tools/services open their own `SessionLocal()` — a plain `from ... import SessionLocal` freezes the real database at import time, so tests couldn't swap in a temp one. Switched every such module to `from pantrypilot import database` + `database.SessionLocal()`, and the `db_session` test fixture now monkeypatches `pantrypilot.database.SessionLocal` to match.
+You see: rerun `try_matching.py`, then open `/admin/activity` and see the timeline of tool calls, results and the final decision, newest first, refreshing live.
 
 **Step 8 — The full agent team (agents-as-tools)**
 Creates: `intake_agent.py`, `dispatch_agent.py`, `coordinator_agent.py`, action tools, `runner.py` (`run_case`), `scripts/run_agent_once.py`.

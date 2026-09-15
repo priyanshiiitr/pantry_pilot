@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "./auth/AuthContext.jsx";
 import RequireRole from "./auth/RequireRole.jsx";
+import ActivityLog from "./pages/admin/ActivityLog.jsx";
 import AdminHome from "./pages/admin/AdminHome.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Signup from "./pages/auth/Signup.jsx";
@@ -98,6 +99,14 @@ export default function App() {
             element={
               <RequireRole roles={["admin"]}>
                 <AdminHome />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/activity"
+            element={
+              <RequireRole roles={["admin"]}>
+                <ActivityLog />
               </RequireRole>
             }
           />

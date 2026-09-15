@@ -11,19 +11,25 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
+from pantrypilot import database
 from pantrypilot.database import build_engine, create_tables, get_db
 from pantrypilot.web.main import app
 
 
 @pytest.fixture
-def db_session(tmp_path: Path) -> Iterator[Session]:
+def db_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Session]:
     """Give a test its own empty database, stored in a temporary file.
 
-    The real data/pantrypilot.db is never touched by tests.
+    The real data/pantrypilot.db is never touched by tests. This also monkeypatches
+    `pantrypilot.database.SessionLocal` to point at the same temporary database, so
+    agent tools and services (agents/tools/*, services/activity_log.py) — which each
+    open their own session via `database.SessionLocal()` — read and write the test
+    database too, instead of silently writing into your real seeded demo data.
     """
     test_engine = build_engine(f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
     create_tables(test_engine)
     make_session = sessionmaker(bind=test_engine, expire_on_commit=False)
+    monkeypatch.setattr(database, "SessionLocal", make_session)
 
     with make_session() as session:
         yield session

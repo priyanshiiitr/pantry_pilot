@@ -9,8 +9,10 @@ and decides. Compare with pantrypilot/services/, which only ever *reports* facts
 from pathlib import Path
 
 from strands import Agent
+from strands.hooks import HookProvider
 from strands.models import Model
 
+from pantrypilot.agents.hooks.reasoning_log_hook import ReasoningLogHook
 from pantrypilot.agents.model_provider import build_model
 from pantrypilot.agents.schemas import MatchProposal
 from pantrypilot.agents.tools.geo_tools import estimate_travel_time
@@ -22,6 +24,8 @@ from pantrypilot.agents.tools.pantry_tools import (
     find_nearby_pantries,
     get_pantry_profile,
 )
+from pantrypilot.models import RunTrigger
+from pantrypilot.services.activity_log import finish_agent_run, log_event, start_agent_run
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "matching.md"
 MATCHING_SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
@@ -38,7 +42,7 @@ MATCHING_TOOLS = [
 ]
 
 
-def build_matching_agent(model: Model | None = None) -> Agent:
+def build_matching_agent(model: Model | None = None, hooks: list[HookProvider] | None = None) -> Agent:
     """Construct the Matching agent. Pass `model` to override the configured default
     (tests use this to plug in a scripted fake model instead of calling a real API)."""
     return Agent(
@@ -46,15 +50,32 @@ def build_matching_agent(model: Model | None = None) -> Agent:
         name="matching",
         system_prompt=MATCHING_SYSTEM_PROMPT,
         tools=MATCHING_TOOLS,
+        hooks=hooks or [],
     )
 
 
-def propose_match(offer_id: int, model: Model | None = None) -> MatchProposal:
-    """Run the Matching agent on one offer and return its structured decision."""
-    agent = build_matching_agent(model)
-    result = agent(
-        f"A new surplus food offer (id={offer_id}) has come in and needs a pantry match. "
-        "Investigate it using your tools and decide.",
-        structured_output_model=MatchProposal,
-    )
-    return result.structured_output
+def propose_match(offer_id: int, model: Model | None = None, trigger: str = RunTrigger.MANUAL) -> MatchProposal:
+    """Run the Matching agent on one offer and return its structured decision.
+
+    Every tool call is recorded in the agent_log table via ReasoningLogHook, and
+    the run itself is recorded in agent_runs — this is what the admin "Agent
+    activity" page reads (see web/routes/admin.py).
+    """
+    run_id = start_agent_run(trigger=trigger, offer_id=offer_id)
+    hook = ReasoningLogHook(run_id=run_id, offer_id=offer_id, agent_name="matching")
+    agent = build_matching_agent(model, hooks=[hook])
+
+    try:
+        result = agent(
+            f"A new surplus food offer (id={offer_id}) has come in and needs a pantry match. "
+            "Investigate it using your tools and decide.",
+            structured_output_model=MatchProposal,
+        )
+    except Exception as error:
+        finish_agent_run(run_id, stop_reason="error", error=str(error))
+        raise
+
+    proposal = result.structured_output
+    log_event(run_id, offer_id, "matching", "decision", proposal.reasoning, details=proposal.model_dump())
+    finish_agent_run(run_id, stop_reason=result.stop_reason, outcome=proposal.model_dump())
+    return proposal

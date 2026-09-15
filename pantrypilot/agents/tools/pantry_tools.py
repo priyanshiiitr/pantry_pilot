@@ -5,8 +5,9 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from strands import tool
 
+from pantrypilot import database
 from pantrypilot.config import settings
-from pantrypilot.database import SessionLocal, utc_now
+from pantrypilot.database import utc_now
 from pantrypilot.models import Delivery, Pantry
 from pantrypilot.services.fairness import COUNTED_DELIVERY_STATUSES, fairness_snapshot
 from pantrypilot.services.geo import haversine_km, is_open_now
@@ -25,7 +26,7 @@ def find_nearby_pantries(lat: float, lon: float, radius_km: float = 15.0) -> lis
         lon: longitude of the location to search from.
         radius_km: how far to search, in kilometers.
     """
-    with SessionLocal() as session:
+    with database.SessionLocal() as session:
         pantries = list(session.scalars(select(Pantry).where(Pantry.accepting_donations.is_(True))))
 
     nearby = []
@@ -45,7 +46,7 @@ def get_pantry_profile(pantry_id: int) -> dict:
     Args:
         pantry_id: the id of the pantry to look up.
     """
-    with SessionLocal() as session:
+    with database.SessionLocal() as session:
         pantry = session.get(Pantry, pantry_id)
         if pantry is None:
             return {"error": f"No pantry with id {pantry_id}."}
@@ -72,7 +73,7 @@ def check_pantry_capacity(pantry_id: int) -> dict:
     Args:
         pantry_id: the id of the pantry to check.
     """
-    with SessionLocal() as session:
+    with database.SessionLocal() as session:
         pantry = session.get(Pantry, pantry_id)
         if pantry is None:
             return {"error": f"No pantry with id {pantry_id}."}
@@ -105,5 +106,5 @@ def calculate_fairness_score(pantry_id: int, extra_kg: float) -> dict:
         pantry_id: the id of the pantry to check.
         extra_kg: how many kg this potential new delivery would add.
     """
-    with SessionLocal() as session:
+    with database.SessionLocal() as session:
         return fairness_snapshot(session, pantry_id, extra_kg)

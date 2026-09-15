@@ -7,7 +7,7 @@ them to generate the interactive docs at /docs.
 
 import re
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
 
@@ -315,3 +315,24 @@ class OfferAdminOut(OfferOut):
     def from_offer(cls, offer: Offer) -> "OfferAdminOut":
         """Build this from an Offer row, pulling the restaurant's name off the relationship."""
         return cls(**OfferOut.model_validate(offer).model_dump(), restaurant_name=offer.restaurant.name)
+
+
+# ---------------------------------------------------------------------------
+# Agent activity log (Step 7)
+# ---------------------------------------------------------------------------
+
+
+class AgentLogEntryOut(BaseModel):
+    """One line of the admin "Agent activity" timeline."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    run_id: int | None
+    offer_id: int | None
+    agent_name: str
+    event_type: str
+    tool_name: str | None
+    summary: str
+    details: dict[str, Any] | None
+    created_at: datetime

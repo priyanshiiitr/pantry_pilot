@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { apiGet } from "../../api.js";
 import { useAuth } from "../../auth/AuthContext.jsx";
 import Layout from "../../components/Layout.jsx";
@@ -12,8 +14,11 @@ export default function AdminHome() {
   return (
     <Layout title="Admin dashboard">
       <p className="muted">
-        Welcome, {user.display_name}. The overview, Decisions inbox and activity log arrive in Steps
-        11–12 — for now, here is every offer in the system.
+        Welcome, {user.display_name}. The overview and Decisions inbox arrive in Steps 11–12 — for now,
+        here is every offer in the system.
+      </p>
+      <p>
+        <Link to="/admin/activity">View agent activity log →</Link>
       </p>
 
       {error && <p className="error-text">{error}</p>}

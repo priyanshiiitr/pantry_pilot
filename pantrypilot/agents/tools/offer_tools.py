@@ -1,13 +1,19 @@
 """Tools for reading an offer and knowing what time it is.
 
-Each tool opens its own short-lived database session (SessionLocal) rather than
-sharing one from a web request, because agents run outside of any HTTP request —
-in a script here, and in the background worker from Step 9 onward.
+Each tool opens its own short-lived database session (database.SessionLocal())
+rather than sharing one from a web request, because agents run outside of any
+HTTP request — in a script here, and in the background worker from Step 9 onward.
+
+We call `database.SessionLocal()` rather than `from pantrypilot.database import
+SessionLocal` so that tests can swap in a temporary database by monkeypatching
+`pantrypilot.database.SessionLocal` — a plain `from` import would freeze in the
+real one at import time and never see the swap.
 """
 
 from strands import tool
 
-from pantrypilot.database import SessionLocal, utc_now
+from pantrypilot import database
+from pantrypilot.database import utc_now
 from pantrypilot.models import Offer
 
 
@@ -18,7 +24,7 @@ def get_offer(offer_id: int) -> dict:
     Args:
         offer_id: the id of the offer to look up.
     """
-    with SessionLocal() as session:
+    with database.SessionLocal() as session:
         offer = session.get(Offer, offer_id)
         if offer is None:
             return {"error": f"No offer with id {offer_id}."}

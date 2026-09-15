@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from pantrypilot.auth.current_user import require_role
 from pantrypilot.database import get_db
 from pantrypilot.models import Role, User
+from pantrypilot.services.activity_log import list_recent_log_entries
 from pantrypilot.services.offers import list_all_offers
-from pantrypilot.web.schemas import OfferAdminOut
+from pantrypilot.web.schemas import AgentLogEntryOut, OfferAdminOut
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -27,3 +28,11 @@ def list_all_offers_route(
     blocks non-admins before this function body executes.
     """
     return [OfferAdminOut.from_offer(offer) for offer in list_all_offers(db)]
+
+
+@router.get("/activity", response_model=list[AgentLogEntryOut])
+def list_activity_route(
+    _user: User = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)
+) -> list[AgentLogEntryOut]:
+    """List the most recent agent activity: every tool call, result and decision, newest first."""
+    return [AgentLogEntryOut.model_validate(entry) for entry in list_recent_log_entries(db)]

@@ -416,3 +416,66 @@ body {
   font-size: 0.85rem;
   font-weight: 600;
 }
+
+/* --- Agent activity timeline (Step 7) --- */
+
+.activity-timeline {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activity-entry {
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--grey);
+  border-radius: 6px;
+}
+
+.activity-entry.activity-tool_call {
+  border-left-color: var(--info);
+}
+
+.activity-entry.activity-tool_result {
+  border-left-color: var(--grey);
+}
+
+.activity-entry.activity-decision {
+  border-left-color: var(--good);
+}
+
+.activity-entry.activity-interrupt,
+.activity-entry.activity-error {
+  border-left-color: var(--bad);
+}
+
+.activity-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.activity-event-type {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  color: var(--brand);
+}
+
+.activity-time {
+  margin-left: auto;
+}
+
+.activity-summary {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
