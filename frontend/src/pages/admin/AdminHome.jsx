@@ -6,20 +6,27 @@ import Layout from "../../components/Layout.jsx";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
-/** AdminHome — a basic list of every offer in the system. The full dashboard arrives in Step 12. */
+/** AdminHome — a basic list of every offer in the system. The full stat-card dashboard arrives in Step 12. */
 export default function AdminHome() {
   const { user } = useAuth();
   const { data: offers, error } = usePolling(() => apiGet("/api/admin/offers"), 3000, []);
+  const { data: decisions } = usePolling(() => apiGet("/api/admin/decisions"), 3000, []);
+  const pendingCount = decisions?.length ?? 0;
 
   return (
     <Layout title="Admin dashboard">
-      <p className="muted">
-        Welcome, {user.display_name}. The overview and Decisions inbox arrive in Steps 11–12 — for now,
-        here is every offer in the system.
-      </p>
-      <p>
-        <Link to="/admin/activity">View agent activity log →</Link>
-      </p>
+      <p className="muted">Welcome, {user.display_name}.</p>
+
+      <div className="actions">
+        <Link to="/admin/decisions" className="button">
+          Decisions inbox{pendingCount > 0 && <span className="inbox-count">{pendingCount}</span>}
+        </Link>
+        <Link to="/admin/activity" className="button button-secondary">
+          Agent activity log
+        </Link>
+      </div>
+
+      <h2>All offers</h2>
 
       {error && <p className="error-text">{error}</p>}
       {!offers ? (

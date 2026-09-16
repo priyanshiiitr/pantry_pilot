@@ -41,7 +41,13 @@ python -m pantrypilot.worker
 
 Open **http://localhost:5173**. Sign up, or log in with any seeded account (e.g. `hope@pantrypilot.test` /
 `demo1234` for a pantry, `admin@pantrypilot.test` for the admin view). A restaurant account can post a
-surplus food offer and watch its status live; the admin account sees every offer posted.
+surplus food offer and watch its status live; the admin account sees every offer posted, the agent
+activity log, and the Decisions inbox when the agent needs a human's judgment call.
+
+To see a real escalation: `python -m scripts.trigger_hard_case --scenario spoilage` (also try
+`no_drivers`, `fairness`, `unclear_allergens`), then either wait for the worker or run
+`python -m scripts.run_agent_once --offer <id>` — if the agent decides it's genuinely stuck, a decision
+card appears at `/admin/decisions` with its reasoning and options.
 
 Run the tests with `pytest`.
 
@@ -66,8 +72,10 @@ Run the tests with `pytest`.
 | Structured output (more) | [`agents/schemas.py`](pantrypilot/agents/schemas.py) | `OfferDetails`, `DispatchPlan`, `CaseUpdate` — every specialist's answer is a validated Pydantic object. |
 | Background execution | [`worker/`](pantrypilot/worker/README.md) | An APScheduler timer (not a request handler) wakes the agent team up on its own every 15 seconds — nobody has to click a button. |
 | Sessions | [`agents/sessions.py`](pantrypilot/agents/sessions.py) | A `FileSessionManager` per offer, so the Coordinator's own prior reasoning survives a decline, a timeout, or the worker process restarting — verified live: a second, independently-built `Agent` object correctly recalled a fact from the first one's conversation. |
+| Interrupts (human-in-the-loop) | [`agents/tools/human_tools.py`](pantrypilot/agents/tools/human_tools.py), [`agents/runner.py`](pantrypilot/agents/runner.py) | The `ask_admin` tool calls `tool_context.interrupt(...)`, genuinely pausing the agent mid-conversation. `runner.py` saves the paused question as a `Decision`, and `resume_case()` continues the *exact same* paused conversation once an admin answers — verified live end-to-end against Groq, including a fresh `Agent` object correctly resuming after the pause. |
+| Structured output (more) | [`web/schemas.py`](pantrypilot/web/schemas.py) `DecisionOut` | The admin sees the agent's own decision card — title, situation, reasoning, options, recommendation — exactly as the model wrote it, not reshaped by our code. |
 
-*More arrives with interrupts and tracing (Steps 11, 13).*
+*More arrives with tracing (Step 13).*
 
 ## License
 

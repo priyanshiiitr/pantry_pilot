@@ -1,10 +1,10 @@
-"""Tests for the worker's scheduled jobs (Steps 9-10).
+"""Tests for the worker's scheduled jobs (Steps 9-11).
 
-pick_up_new_offers and expire_stale_dispatch_requests's own logic — which rows
-they pick, what context they build, that one failure doesn't stop the rest — is
-tested here by replacing run_case with a stub. The agents themselves are
-already tested elsewhere; this only tests the timer's wiring, never a real
-model call.
+pick_up_new_offers, expire_stale_dispatch_requests and resume_answered_decisions'
+own logic — which rows they pick, what context they build, that one failure
+doesn't stop the rest — is tested here by replacing run_case/resume_case with a
+stub. The agents themselves are already tested elsewhere; this only tests the
+timer's wiring, never a real model call.
 """
 
 from datetime import timedelta
@@ -26,6 +26,7 @@ from pantrypilot.models import (
     Role,
     User,
 )
+from pantrypilot.services.decisions import answer_decision, create_decision
 from pantrypilot.worker import jobs
 
 
@@ -172,3 +173,67 @@ def test_expire_stale_dispatch_requests_does_nothing_when_none_overdue(db_sessio
 
     db_session.refresh(fresh)
     assert fresh.status == DispatchStatus.REQUESTED
+
+
+SAMPLE_CARD = {
+    "title": "No pantry can take this before it spoils",
+    "situation": "Deadline is in 20 minutes.",
+    "reasoning": "No candidate can arrive in time.",
+    "options": [{"label": "Extend the deadline", "consequence": "Restaurant must agree."}],
+    "recommended_option": "Extend the deadline.",
+    "urgency": "high",
+}
+
+
+def make_answered_decision(db_session: Session, email: str) -> int:
+    """Create a minimal offer with one answered decision, and return the decision's id."""
+    offer = make_offer(db_session, email)
+    admin = User(email=f"admin-{email}", role=Role.ADMIN, display_name="Admin", password_hash="x")
+    db_session.add(admin)
+    db_session.commit()
+    decision = create_decision(db_session, offer.id, f"int-{email}", f"ask_admin_offer_{offer.id}", SAMPLE_CARD)
+    answer_decision(db_session, decision, "Extend the deadline", None, admin.id)
+    return decision.id
+
+
+def test_resume_answered_decisions_resumes_each_one(db_session: Session, monkeypatch) -> None:
+    """Every answered decision gets a resume_case call."""
+    decision1_id = make_answered_decision(db_session, "r1@test.local")
+    decision2_id = make_answered_decision(db_session, "r2@test.local")
+
+    calls: list[int] = []
+    monkeypatch.setattr(jobs, "resume_case", lambda decision_id: calls.append(decision_id))
+
+    jobs.resume_answered_decisions()
+
+    assert set(calls) == {decision1_id, decision2_id}
+
+
+def test_resume_answered_decisions_continues_after_one_failure(db_session: Session, monkeypatch) -> None:
+    """If resuming one decision raises, the others still get processed."""
+    decision1_id = make_answered_decision(db_session, "r1@test.local")
+    decision2_id = make_answered_decision(db_session, "r2@test.local")
+
+    calls: list[int] = []
+
+    def fake_resume_case(decision_id: int) -> None:
+        calls.append(decision_id)
+        if decision_id == decision1_id:
+            raise RuntimeError("simulated failure")
+
+    monkeypatch.setattr(jobs, "resume_case", fake_resume_case)
+
+    jobs.resume_answered_decisions()  # must not raise, despite decision1 failing
+
+    assert set(calls) == {decision1_id, decision2_id}
+
+
+@pytest.mark.usefixtures("db_session")
+def test_resume_answered_decisions_does_nothing_when_none_answered(monkeypatch) -> None:
+    """No answered decisions is a no-op, not an error."""
+    calls: list[int] = []
+    monkeypatch.setattr(jobs, "resume_case", lambda decision_id: calls.append(decision_id))
+
+    jobs.resume_answered_decisions()
+
+    assert calls == []

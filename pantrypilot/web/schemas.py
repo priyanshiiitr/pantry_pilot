@@ -12,7 +12,7 @@ from typing import Any, Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
 
 from pantrypilot.database import utc_now
-from pantrypilot.models import DIETARY_RESTRICTIONS, Delivery, DispatchRequest, Offer, User
+from pantrypilot.models import DIETARY_RESTRICTIONS, Decision, Delivery, DispatchRequest, Offer, User
 
 # Only these three roles can sign up through the form. Admin accounts are only
 # ever created by the seed script — see pantrypilot/services/accounts.py.
@@ -441,3 +441,58 @@ class DriverTripOut(BaseModel):
             status=delivery.status,
             kg=delivery.kg,
         )
+
+
+# ---------------------------------------------------------------------------
+# Decisions inbox (Step 11)
+# ---------------------------------------------------------------------------
+
+
+class DecisionOut(BaseModel):
+    """One decision card, with everything the admin needs to answer it.
+
+    `card` is exactly what the agent wrote when it called ask_admin: title,
+    situation, reasoning, options, recommended_option, urgency (see
+    agents/tools/human_tools.py) — we don't reshape it, so whatever the agent
+    puts there is shown as-is.
+    """
+
+    id: int
+    offer_id: int
+    offer_title: str
+    restaurant_name: str
+    kind: str
+    card: dict[str, Any]
+    status: str
+    chosen_option: str | None
+    admin_note: str | None
+    created_at: datetime
+    answered_at: datetime | None
+    resumed_at: datetime | None
+
+    @classmethod
+    def from_decision(cls, decision: Decision) -> "DecisionOut":
+        """Build this from a Decision row, pulling offer/restaurant details off the relationships."""
+        return cls(
+            id=decision.id,
+            offer_id=decision.offer_id,
+            offer_title=decision.offer.title,
+            restaurant_name=decision.offer.restaurant.name,
+            kind=decision.kind,
+            card=decision.card,
+            status=decision.status,
+            chosen_option=decision.chosen_option,
+            admin_note=decision.admin_note,
+            created_at=decision.created_at,
+            answered_at=decision.answered_at,
+            resumed_at=decision.resumed_at,
+        )
+
+
+class AnswerDecisionRequest(BaseModel):
+    """Body of POST /api/admin/decisions/{id}/answer."""
+
+    chosen_option: str
+    admin_note: str | None = None
+
+    _check_chosen_option = field_validator("chosen_option")(_not_blank)

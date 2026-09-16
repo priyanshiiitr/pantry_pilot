@@ -541,3 +541,159 @@ body {
   background: var(--bad);
   border-color: var(--bad);
 }
+
+.inbox-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* --- Decisions inbox (Step 11) --- */
+
+.decisions-list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.decision-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--grey);
+  border-radius: 10px;
+  padding: 18px 20px;
+  max-width: 680px;
+}
+
+.decision-card.urgency-border-bad {
+  border-left-color: var(--bad);
+}
+
+.decision-card.urgency-border-amber {
+  border-left-color: var(--warn);
+}
+
+.decision-card.urgency-border-grey {
+  border-left-color: var(--grey);
+}
+
+.decision-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.urgency-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.urgency-badge.urgency-bad {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+.urgency-badge.urgency-amber {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.urgency-badge.urgency-grey {
+  background: var(--grey-bg);
+  color: var(--grey);
+}
+
+.decision-title {
+  margin: 0 0 12px;
+}
+
+.decision-section {
+  margin-bottom: 12px;
+}
+
+.decision-section p {
+  margin: 2px 0 0;
+}
+
+.decision-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.decision-recommendation {
+  padding: 10px 12px;
+  background: var(--good-bg);
+  border-radius: 8px;
+}
+
+.decision-recommendation .decision-label {
+  color: var(--good);
+}
+
+.decision-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.decision-option {
+  text-align: left;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.decision-option:hover {
+  border-color: var(--brand);
+}
+
+.decision-option-selected {
+  border-color: var(--brand);
+  background: var(--good-bg);
+}
+
+.decision-option-label {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.decision-option-consequence {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+}
+
+.recommended-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--good);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}

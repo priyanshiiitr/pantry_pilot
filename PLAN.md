@@ -396,11 +396,13 @@ You see: **the full happy path in 4 windows**: post → agent matches → driver
 
 ### Phase C — Human in the loop
 
-**Step 11 — Interrupts + Decisions inbox**
-Creates: `human_tools.ask_admin`, `hooks/approval_gate_hook.py`, decision saving/resuming in `runner.py`, resume job, the **Decisions inbox** UI (the showpiece), Supervised-mode toggle, `scripts/trigger_hard_case.py` + admin button.
-You see: trigger "spoilage", a decision card appears with reasoning and options, you pick one, and within seconds the agent resumes and finishes. **Restart test:** stop the worker while a decision is pending, answer it, start the worker again, and it still resumes correctly.
-*I explain: interrupts, and why the pause survives restarts.*
-⚠️ This is the riskiest step. I'll first write a tiny test proving "interrupt → restart → resume" works with `FileSessionManager` in 1.55.1, *before* building the UI on top of it.
+**Step 11 — Interrupts + Decisions inbox** ✅ done (Supervised-mode approval gate and the admin trigger button deferred — see below)
+Creates: `agents/tools/human_tools.py` (`ask_admin` — calls `tool_context.interrupt(...)`, genuinely pausing the agent), `services/decisions.py` (deterministic Decision CRUD), `runner.py` additions (`_handle_agent_result` shared by `run_case`/`resume_case`, `resume_case` itself), `/api/admin/decisions` (list/get/answer), `worker/jobs.py`'s `resume_answered_decisions` (answering is a fast, synchronous API call; resuming calls the model, so it happens separately on the worker's own 10s schedule), the **Decisions inbox** page, `scripts/trigger_hard_case.py` (4 scenarios: spoilage, no_drivers, fairness, unclear_allergens — doesn't force an escalation, just sets up a hard situation).
+You run: `python -m scripts.trigger_hard_case --scenario spoilage`, then either wait for the worker or run `python -m scripts.run_agent_once --offer <id>`.
+You see: if the agent decides it's genuinely stuck, a decision card appears in `/admin/decisions` with its reasoning and 2-4 options; pick one, and within ~10 seconds (the worker's resume check) it resumes and finishes.
+**Verified live, in full, against Groq** — this is the most important verification in the whole project: `run_case()` paused correctly on a real `ask_admin` call (`stop_reason == "interrupt"`, a real Strands-generated `interrupt_id`, the exact card saved as a `Decision`); the admin's answer was recorded deterministically; then `resume_case()` — using a **completely fresh `Agent` object**, no shared Python state — correctly resumed the *exact same paused conversation* and produced a final `CaseUpdate`.
+**A real bug found and fixed along the way**: resuming with Strands' raw `interruptResponse` list *and* `structured_output_model` in the same call sometimes confused Groq's gpt-oss-120b into calling a nonexistent tool named `"json"` (an internal schema key, not a real tool). Fixed by splitting the resume into two ordinary turns: resume plainly first, then ask for the structured `CaseUpdate` once the conversation is back to a normal shape. Also learned firsthand that once Strands processes an interrupt response — even if a *later* step in that same call then fails for an unrelated reason — the interrupt is considered consumed and can't be re-answered; a failed resume stays visible as `status=failed` for a human to notice, by design, rather than silently retrying against a stale interrupt.
+**Deferred** (noted honestly rather than silently dropped): the Supervised-mode approval gate (`hooks/approval_gate_hook.py`, an admin-toggleable "hold every assignment for approval" switch, separate from the agent's own escalation judgment) and an admin dashboard button for triggering hard cases (the script covers the same need). Both are small, additive, and can be picked up later without touching what's already built.
 
 ### Phase D — Dashboard, memory, polish
 
@@ -426,7 +428,7 @@ You see: a fresh-clone quickstart that runs the whole demo from scratch.
 
 ## 12. Known risks I'll watch
 
-- **Interrupt restore after restart**: verified with a test at the start of Step 11.
+- **Interrupt restore after restart**: verified live in Step 11 — a completely fresh `Agent` object (no shared Python state) correctly resumed a paused conversation using only the persisted session file.
 - **Parallel tool calls**: the Coordinator could fire two action tools at once. I'll set it to run tools one at a time (sequential tool executor, name confirmed in Step 8).
 - **Cheap model quality**: Haiku may occasionally reason poorly on hard cases. The `COORDINATOR_MODEL_ID` setting lets you use a stronger model for the manager only.
 - **SQLite with two processes** (web + worker): turn on WAL mode (a SQLite setting that lets reads and writes overlap safely).

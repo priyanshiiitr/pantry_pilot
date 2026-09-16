@@ -27,6 +27,7 @@ from pantrypilot.agents.intake_agent import run_intake_case
 from pantrypilot.agents.matching_agent import propose_match
 from pantrypilot.agents.model_provider import build_model
 from pantrypilot.agents.tools.action_tools import build_action_tools, notify_user
+from pantrypilot.agents.tools.human_tools import build_ask_admin_tool
 from pantrypilot.agents.tools.memory_tools import recall_facts, remember_fact
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "coordinator.md"
@@ -82,6 +83,7 @@ def build_coordinator_agent(
     tools = [
         *_build_specialist_tools(offer_id, run_id),
         *build_action_tools(offer_id),
+        build_ask_admin_tool(offer_id),
         notify_user,
         recall_facts,
         remember_fact,

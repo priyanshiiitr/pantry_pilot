@@ -9,9 +9,10 @@ import logging
 from sqlalchemy import select
 
 from pantrypilot import database
-from pantrypilot.agents.runner import run_case
+from pantrypilot.agents.runner import resume_case, run_case
 from pantrypilot.database import utc_now
 from pantrypilot.models import DispatchRequest, DispatchStatus, Offer, OfferStatus, RunTrigger
+from pantrypilot.services.decisions import list_answered_decisions
 from pantrypilot.services.dispatch import expire_dispatch_request
 
 logger = logging.getLogger(__name__)
@@ -75,3 +76,24 @@ def expire_stale_dispatch_requests() -> None:
                     logger.info("Dispatch request #%s expired — driver did not respond in time", request_id)
         except Exception:
             logger.exception("Failed to expire dispatch request #%s", request_id)
+
+
+def resume_answered_decisions() -> None:
+    """Find decisions an admin has answered, and resume each paused Coordinator
+    with their choice.
+
+    This is deliberately separate from the (fast, synchronous) "answer a
+    decision" API call: resuming calls the model, which can take a while, so it
+    happens here on the worker's own schedule instead of making an admin's
+    button click hang. Each resume is its own try/except, same as the other
+    jobs — one bad decision never blocks the rest.
+    """
+    with database.SessionLocal() as session:
+        answered_decision_ids = [decision.id for decision in list_answered_decisions(session)]
+
+    for decision_id in answered_decision_ids:
+        try:
+            logger.info("Resuming offer's agent for decision #%s", decision_id)
+            resume_case(decision_id)
+        except Exception:
+            logger.exception("Failed to resume decision #%s", decision_id)
