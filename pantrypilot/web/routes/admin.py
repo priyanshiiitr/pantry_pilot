@@ -13,9 +13,27 @@ from pantrypilot.auth.current_user import require_role
 from pantrypilot.database import get_db
 from pantrypilot.models import DecisionStatus, Role, User
 from pantrypilot.services.activity_log import list_recent_log_entries
+from pantrypilot.services.dashboard import (
+    get_dashboard_stats,
+    get_recent_activity_for_user,
+    get_user_or_raise,
+    get_user_status_label,
+    list_all_users,
+)
 from pantrypilot.services.decisions import answer_decision, get_decision, list_pending_decisions
 from pantrypilot.services.offers import list_all_offers
-from pantrypilot.web.schemas import AgentLogEntryOut, AnswerDecisionRequest, DecisionOut, OfferAdminOut
+from pantrypilot.web.schemas import (
+    AdminUserDetailOut,
+    AdminUserOut,
+    AgentLogEntryOut,
+    AnswerDecisionRequest,
+    DashboardStatsOut,
+    DecisionOut,
+    DriverProfileOut,
+    OfferAdminOut,
+    PantryProfileOut,
+    RestaurantProfileOut,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -78,3 +96,59 @@ def answer_decision_route(
         raise HTTPException(status_code=400, detail=f"This decision is already '{decision.status}'.")
     answer_decision(db, decision, payload.chosen_option, payload.admin_note, user.id)
     return DecisionOut.from_decision(decision)
+
+
+@router.get("/stats", response_model=DashboardStatsOut)
+def get_stats_route(
+    _user: User = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)
+) -> DashboardStatsOut:
+    """The stat cards on the admin home page."""
+    return DashboardStatsOut(**get_dashboard_stats(db))
+
+
+@router.get("/users", response_model=list[AdminUserOut])
+def list_all_users_route(
+    _user: User = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)
+) -> list[AdminUserOut]:
+    """List every restaurant, pantry, driver and admin account."""
+    return [
+        AdminUserOut(
+            id=user.id,
+            email=user.email,
+            role=user.role,
+            display_name=user.display_name,
+            status_label=get_user_status_label(user),
+            created_at=user.created_at,
+        )
+        for user in list_all_users(db)
+    ]
+
+
+@router.get("/users/{user_id}", response_model=AdminUserDetailOut)
+def get_user_detail_route(
+    user_id: int, _user: User = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)
+) -> AdminUserDetailOut:
+    """One user's profile fields (reusing the same schemas they see themselves)
+    plus a short list of their recent activity."""
+    try:
+        user = get_user_or_raise(db, user_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail="User not found.") from error
+
+    profile: dict = {}
+    if user.role == Role.RESTAURANT and user.restaurant is not None:
+        profile = RestaurantProfileOut.model_validate(user.restaurant).model_dump()
+    elif user.role == Role.PANTRY and user.pantry is not None:
+        profile = PantryProfileOut.model_validate(user.pantry).model_dump()
+    elif user.role == Role.DRIVER and user.driver is not None:
+        profile = DriverProfileOut.model_validate(user.driver).model_dump()
+
+    return AdminUserDetailOut(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        display_name=user.display_name,
+        created_at=user.created_at,
+        profile=profile,
+        recent_activity=get_recent_activity_for_user(db, user),
+    )

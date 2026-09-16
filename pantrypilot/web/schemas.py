@@ -496,3 +496,51 @@ class AnswerDecisionRequest(BaseModel):
     admin_note: str | None = None
 
     _check_chosen_option = field_validator("chosen_option")(_not_blank)
+
+
+# ---------------------------------------------------------------------------
+# Admin dashboard: stats, users (Step 12)
+# ---------------------------------------------------------------------------
+
+
+class DashboardStatsOut(BaseModel):
+    """The stat cards on the admin home page."""
+
+    active_offers: int
+    pending_decisions: int
+    completed_today: int
+    kg_saved_today: float
+    meals_saved_today: int
+    kg_saved_total: float
+    meals_saved_total: int
+
+
+class AdminUserOut(BaseModel):
+    """One row in the admin's all-users list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    role: str
+    display_name: str
+    status_label: str
+    created_at: datetime
+
+
+class AdminUserDetailOut(BaseModel):
+    """One user's full detail view: their profile fields plus recent activity.
+
+    `profile` and `recent_activity` are shaped differently per role (a
+    restaurant's profile isn't a pantry's) — kept as plain dicts rather than a
+    rigid schema, since the route already knows which role it's building this
+    for and puts the right fields in.
+    """
+
+    id: int
+    email: str
+    role: str
+    display_name: str
+    created_at: datetime
+    profile: dict[str, Any] = {}
+    recent_activity: list[dict[str, Any]] = []

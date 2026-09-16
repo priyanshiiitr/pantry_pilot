@@ -687,6 +687,44 @@ body {
   font-size: 0.85rem;
 }
 
+/* --- Stat cards (Step 12) --- */
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.stat-card-good .stat-value {
+  color: var(--good);
+}
+
+.stat-card-amber .stat-value {
+  color: var(--warn);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .recommended-tag {
   display: inline-block;
   padding: 1px 8px;

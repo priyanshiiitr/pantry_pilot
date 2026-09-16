@@ -4,7 +4,9 @@ import { AuthProvider } from "./auth/AuthContext.jsx";
 import RequireRole from "./auth/RequireRole.jsx";
 import ActivityLog from "./pages/admin/ActivityLog.jsx";
 import AdminHome from "./pages/admin/AdminHome.jsx";
+import AllUsers from "./pages/admin/AllUsers.jsx";
 import DecisionsInbox from "./pages/admin/DecisionsInbox.jsx";
+import UserDetail from "./pages/admin/UserDetail.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Signup from "./pages/auth/Signup.jsx";
 import DriverHome from "./pages/driver/DriverHome.jsx";
@@ -116,6 +118,22 @@ export default function App() {
             element={
               <RequireRole roles={["admin"]}>
                 <DecisionsInbox />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <RequireRole roles={["admin"]}>
+                <AllUsers />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/users/:userId"
+            element={
+              <RequireRole roles={["admin"]}>
+                <UserDetail />
               </RequireRole>
             }
           />

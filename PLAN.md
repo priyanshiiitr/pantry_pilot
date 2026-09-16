@@ -406,9 +406,10 @@ You see: if the agent decides it's genuinely stuck, a decision card appears in `
 
 ### Phase D — Dashboard, memory, polish
 
-**Step 12 — Admin dashboard**
-Overview cards (active offers, in-progress, completed today, kg / meals saved, pending decisions), users list + detail pages, polished activity timeline, map of restaurants/pantries/drivers/active deliveries.
-You see: a real dashboard that updates while the demo runs.
+**Step 12 — Admin dashboard** ✅ done (map deferred — see below)
+Creates: `services/dashboard.py` (stat aggregation, users list, per-user recent activity — reusing the existing profile schemas for the detail view rather than duplicating field lists), `/api/admin/stats`, `/api/admin/users`, `/api/admin/users/{id}`; frontend `StatCard.jsx`, stat-cards row on `AdminHome`, `AllUsers.jsx`, `UserDetail.jsx`. The activity timeline (Step 7) and Decisions inbox (Step 11) were already built earlier — this step is what completes the dashboard, not what starts it.
+You see: live stat cards (active offers, pending decisions, completed today, kg/meals saved today and all-time) updating while the demo runs; a users list with role and status (on duty / accepting donations); clicking through to a detail page showing that user's own profile fields plus their 5 most recent offers/deliveries/trips.
+**Deferred, noted honestly**: the map of restaurants/pantries/drivers. The plan explicitly marked it optional ("if not too complex"), and Leaflet + tile layer + coordinate plotting is a meaningful chunk of work for a purely visual feature — I judged finishing memory, tracing and docs at real depth (Steps 13-15) a better use of the remaining budget than a map. It can be added later without touching anything already built (every pantry/driver/restaurant already has lat/lon).
 
 **Step 13 — Long-term memory + tracing**
 Creates: `memory_tools` (`remember_fact`/`recall_facts`, after evaluating Strands' native `MemoryManager`), admin "What the agent remembers" page with delete; admin can add "remember this" when answering a decision; `agents/telemetry.py`.
