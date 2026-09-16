@@ -13,6 +13,7 @@ import argparse
 from pantrypilot.agents.console import ensure_utf8_console
 from pantrypilot.agents.matching_agent import propose_match
 from pantrypilot.agents.schemas import MatchProposal
+from pantrypilot.agents.telemetry import configure_tracing
 
 
 def print_proposal(proposal: MatchProposal) -> None:
@@ -45,6 +46,7 @@ def print_proposal(proposal: MatchProposal) -> None:
 def main() -> None:
     """Parse the command line, run the agent, and print its decision."""
     ensure_utf8_console()  # see agents/console.py — avoids a Windows print crash
+    configure_tracing()  # prints OpenTelemetry spans if OTEL_CONSOLE=true in .env
 
     parser = argparse.ArgumentParser(description="Run the Matching agent on one offer.")
     parser.add_argument("--offer", type=int, required=True, help="id of the offer to match")

@@ -44,6 +44,9 @@ export default function AdminHome() {
         <Link to="/admin/users" className="button button-secondary">
           All users
         </Link>
+        <Link to="/admin/memory" className="button button-secondary">
+          What the agent remembers
+        </Link>
       </div>
 
       <h2>All offers</h2>

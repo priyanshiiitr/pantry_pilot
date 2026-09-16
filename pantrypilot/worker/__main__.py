@@ -10,6 +10,7 @@ import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from pantrypilot.agents.console import ensure_utf8_console
+from pantrypilot.agents.telemetry import configure_tracing
 from pantrypilot.database import create_tables
 from pantrypilot.worker.jobs import expire_stale_dispatch_requests, pick_up_new_offers, resume_answered_decisions
 
@@ -24,6 +25,7 @@ RESUME_CHECK_INTERVAL_SECONDS = 10
 def main() -> None:
     """Build the scheduler, register the jobs, and run until interrupted."""
     ensure_utf8_console()  # see agents/console.py — avoids a Windows print crash
+    configure_tracing()  # prints OpenTelemetry spans if OTEL_CONSOLE=true in .env
 
     # Safe to call every time: only creates tables that don't exist yet. Without
     # this, starting the worker against a brand-new database (or before ever

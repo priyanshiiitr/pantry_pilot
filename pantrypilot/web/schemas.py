@@ -544,3 +544,20 @@ class AdminUserDetailOut(BaseModel):
     created_at: datetime
     profile: dict[str, Any] = {}
     recent_activity: list[dict[str, Any]] = []
+
+
+# ---------------------------------------------------------------------------
+# Agent memory (Step 13)
+# ---------------------------------------------------------------------------
+
+
+class AgentMemoryOut(BaseModel):
+    """One remembered fact, with a readable name for what it's about."""
+
+    id: int
+    subject_type: str
+    subject_id: int
+    subject_name: str
+    fact: str
+    source: str
+    created_at: datetime

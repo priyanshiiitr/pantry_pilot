@@ -21,11 +21,13 @@ from pantrypilot.services.dashboard import (
     list_all_users,
 )
 from pantrypilot.services.decisions import answer_decision, get_decision, list_pending_decisions
+from pantrypilot.services.memory import deactivate_fact, get_subject_name, list_active_facts
 from pantrypilot.services.offers import list_all_offers
 from pantrypilot.web.schemas import (
     AdminUserDetailOut,
     AdminUserOut,
     AgentLogEntryOut,
+    AgentMemoryOut,
     AnswerDecisionRequest,
     DashboardStatsOut,
     DecisionOut,
@@ -152,3 +154,34 @@ def get_user_detail_route(
         profile=profile,
         recent_activity=get_recent_activity_for_user(db, user),
     )
+
+
+@router.get("/memory", response_model=list[AgentMemoryOut])
+def list_memory_route(
+    _user: User = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)
+) -> list[AgentMemoryOut]:
+    """List every fact the agents can currently recall, newest first."""
+    return [
+        AgentMemoryOut(
+            id=fact.id,
+            subject_type=fact.subject_type,
+            subject_id=fact.subject_id,
+            subject_name=get_subject_name(db, fact.subject_type, fact.subject_id),
+            fact=fact.fact,
+            source=fact.source,
+            created_at=fact.created_at,
+        )
+        for fact in list_active_facts(db)
+    ]
+
+
+@router.delete("/memory/{fact_id}")
+def delete_memory_route(
+    fact_id: int, _user: User = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)
+) -> dict[str, str]:
+    """Stop the agents from recalling this fact (soft delete — see services/memory.py)."""
+    try:
+        deactivate_fact(db, fact_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail="Fact not found.") from error
+    return {"status": "deleted"}

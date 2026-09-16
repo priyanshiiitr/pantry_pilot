@@ -13,6 +13,7 @@ import argparse
 from pantrypilot.agents.console import ensure_utf8_console
 from pantrypilot.agents.runner import run_case
 from pantrypilot.agents.schemas import CaseUpdate
+from pantrypilot.agents.telemetry import configure_tracing
 
 
 def print_update(update: CaseUpdate) -> None:
@@ -29,6 +30,7 @@ def print_update(update: CaseUpdate) -> None:
 def main() -> None:
     """Parse the command line, run the full agent team, and print the result."""
     ensure_utf8_console()  # see agents/console.py — avoids a Windows print crash
+    configure_tracing()  # prints OpenTelemetry spans if OTEL_CONSOLE=true in .env
 
     parser = argparse.ArgumentParser(description="Run the full agent team on one offer.")
     parser.add_argument("--offer", type=int, required=True, help="id of the offer to process")

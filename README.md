@@ -74,8 +74,10 @@ Run the tests with `pytest`.
 | Sessions | [`agents/sessions.py`](pantrypilot/agents/sessions.py) | A `FileSessionManager` per offer, so the Coordinator's own prior reasoning survives a decline, a timeout, or the worker process restarting — verified live: a second, independently-built `Agent` object correctly recalled a fact from the first one's conversation. |
 | Interrupts (human-in-the-loop) | [`agents/tools/human_tools.py`](pantrypilot/agents/tools/human_tools.py), [`agents/runner.py`](pantrypilot/agents/runner.py) | The `ask_admin` tool calls `tool_context.interrupt(...)`, genuinely pausing the agent mid-conversation. `runner.py` saves the paused question as a `Decision`, and `resume_case()` continues the *exact same* paused conversation once an admin answers — verified live end-to-end against Groq, including a fresh `Agent` object correctly resuming after the pause. |
 | Structured output (more) | [`web/schemas.py`](pantrypilot/web/schemas.py) `DecisionOut` | The admin sees the agent's own decision card — title, situation, reasoning, options, recommendation — exactly as the model wrote it, not reshaped by our code. |
+| Memory | [`agents/tools/memory_tools.py`](pantrypilot/agents/tools/memory_tools.py), [`services/memory.py`](pantrypilot/services/memory.py) | `recall_facts`/`remember_fact` tools backed by a simple table (evaluated Strands' native `MemoryManager` and chose to keep this — it integrates directly with the admin "What the agent remembers" page). |
+| Observability (tracing) | [`agents/telemetry.py`](pantrypilot/agents/telemetry.py) | `StrandsTelemetry().setup_console_exporter()`, enabled via `OTEL_CONSOLE=true` — verified live producing real OpenTelemetry spans (`gen_ai.system.message`, `gen_ai.user.message`, `gen_ai.choice`, token usage) for every model call. |
 
-*More arrives with tracing (Step 13).*
+All of this is complete for the hackathon build. Remaining phases (Steps 14-15) are tests and docs polish.
 
 ## License
 

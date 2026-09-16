@@ -4,6 +4,7 @@ import { AuthProvider } from "./auth/AuthContext.jsx";
 import RequireRole from "./auth/RequireRole.jsx";
 import ActivityLog from "./pages/admin/ActivityLog.jsx";
 import AdminHome from "./pages/admin/AdminHome.jsx";
+import AgentMemory from "./pages/admin/AgentMemory.jsx";
 import AllUsers from "./pages/admin/AllUsers.jsx";
 import DecisionsInbox from "./pages/admin/DecisionsInbox.jsx";
 import UserDetail from "./pages/admin/UserDetail.jsx";
@@ -134,6 +135,14 @@ export default function App() {
             element={
               <RequireRole roles={["admin"]}>
                 <UserDetail />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/memory"
+            element={
+              <RequireRole roles={["admin"]}>
+                <AgentMemory />
               </RequireRole>
             }
           />
