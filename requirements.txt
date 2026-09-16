@@ -26,3 +26,7 @@ strands-agents[anthropic,openai,otel]==1.55.1
 # --- Tests ---
 pytest==9.1.1               # Test runner
 httpx==0.28.1               # Needed by FastAPI's TestClient to call the API in tests
+
+# --- Optional: only for deploying to AWS Bedrock AgentCore Runtime (see deploy/agentcore_app.py) ---
+# Not installed by default - nothing local needs it. Uncomment when actually deploying:
+# bedrock-agentcore==1.23.0

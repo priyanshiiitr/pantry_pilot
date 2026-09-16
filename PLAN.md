@@ -423,9 +423,9 @@ Auditing test coverage found that `action_tools.py` had direct tool-level tests 
 The **escalation flow** is already covered by `test_runner_interrupts.py` (`_handle_agent_result`'s two branches via a fake `AgentResult`, no scripted fake model needed since the branching logic is pure Python) plus `test_decisions.py` and the resume tests in `test_worker_jobs.py` — and, more importantly, **verified live end-to-end** in Step 11 against a real model. A scripted fake Strands `Model` class was considered for additional coverage but judged lower value than the docs work in Step 15, given the live verification already exists.
 You run: `pytest` → **164 tests, all green, zero API cost.**
 
-**Step 15 — Docs + deployment path**
-`README.md` (problem, users, screenshots, quickstart, **"Strands features we used and where"** with file links), `docs/architecture.md` + Mermaid diagram, `docs/aws-deployment.md` + `deploy/agentcore_app.py` stub, `docs/demo-script.md` (5-minute shot list with one escalation).
-You see: a fresh-clone quickstart that runs the whole demo from scratch.
+**Step 15 — Docs + deployment path** ✅ done
+Added `docs/architecture.md` (process/agent overview, a Mermaid sequence diagram of the full pause-for-a-human → admin answers → resume flow, and a data-flow diagram), `docs/demo-script.md` (a 5-minute shot list built around one live escalation via `scripts/trigger_hard_case.py`, plus a "if something goes wrong live" section), and `docs/aws-deployment.md` (a component-by-component mapping — worker jobs → EventBridge + Lambda, `runner.run_case`/`resume_case` → AgentCore Runtime, SQLite → RDS Postgres, `FileSessionManager` → AgentCore Memory, tracing → CloudWatch — plus an explicit "what would/wouldn't change" section making clear no agent code moves). Added `deploy/agentcore_app.py`, a real (uninstalled-by-default; `bedrock-agentcore` is commented out in `requirements.txt`) stub `@app.entrypoint` wrapping `run_case`/`resume_case` with the same JSON-in/JSON-out shape AgentCore Runtime expects. Updated `README.md`: removed the "under construction" banner, linked the new docs, and closed out the Strands-features table's note that tests/docs were still pending.
+You see: `docs/architecture.md`, `docs/demo-script.md`, `docs/aws-deployment.md`, `deploy/agentcore_app.py`, and a README that reads like a finished project, not a work-in-progress.
 
 ---
 

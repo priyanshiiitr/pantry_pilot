@@ -4,7 +4,7 @@
 
 Built for the AWS "Agents for Humans" hackathon with the [Strands Agents SDK](https://strandsagents.com).
 
-> 🚧 Under construction. See [PLAN.md](PLAN.md) for the full plan and progress.
+> ✅ Feature-complete hackathon build. See [PLAN.md](PLAN.md) for the full step-by-step build log.
 
 ## The problem
 
@@ -58,7 +58,8 @@ Run the tests with `pytest`.
 | [`pantrypilot/`](pantrypilot/README.md) | Python backend: API, database, agents, worker |
 | [`frontend/`](frontend/README.md) | React app |
 | `tests/` | pytest tests |
-| `docs/` | Architecture, AWS deployment, demo script (coming in later steps) |
+| [`docs/`](docs/architecture.md) | [Architecture](docs/architecture.md) (with diagrams), [AWS deployment path](docs/aws-deployment.md), [demo script](docs/demo-script.md) |
+| [`deploy/agentcore_app.py`](deploy/agentcore_app.py) | Stub entrypoint for hosting the agent team on AWS Bedrock AgentCore Runtime (not needed to run locally) |
 
 ## Which Strands features we used and where
 
@@ -77,7 +78,18 @@ Run the tests with `pytest`.
 | Memory | [`agents/tools/memory_tools.py`](pantrypilot/agents/tools/memory_tools.py), [`services/memory.py`](pantrypilot/services/memory.py) | `recall_facts`/`remember_fact` tools backed by a simple table (evaluated Strands' native `MemoryManager` and chose to keep this — it integrates directly with the admin "What the agent remembers" page). |
 | Observability (tracing) | [`agents/telemetry.py`](pantrypilot/agents/telemetry.py) | `StrandsTelemetry().setup_console_exporter()`, enabled via `OTEL_CONSOLE=true` — verified live producing real OpenTelemetry spans (`gen_ai.system.message`, `gen_ai.user.message`, `gen_ai.choice`, token usage) for every model call. |
 
-All of this is complete for the hackathon build. Remaining phases (Steps 14-15) are tests and docs polish.
+All of this is complete for the hackathon build, including tests (164, all passing, zero API cost — see
+`tests/`) and docs (`docs/architecture.md`, `docs/demo-script.md`, `docs/aws-deployment.md`).
+
+## Learn more
+
+- [`docs/architecture.md`](docs/architecture.md) — how the three processes and four agents fit together,
+  with a sequence diagram of the pause/resume-for-a-human flow.
+- [`docs/demo-script.md`](docs/demo-script.md) — a 5-minute demo shot list, including a live escalation.
+- [`docs/aws-deployment.md`](docs/aws-deployment.md) — how each local piece (worker, runner, sessions,
+  tracing) maps onto EventBridge, Lambda, AgentCore Runtime, RDS and CloudWatch.
+- [PLAN.md](PLAN.md) — the full build log, step by step, with what was verified live against a real model
+  and what was deliberately deferred.
 
 ## License
 
