@@ -65,8 +65,9 @@ Run the tests with `pytest`.
 | Multi-agent (agents-as-tools) | [`agents/coordinator_agent.py`](pantrypilot/agents/coordinator_agent.py) | A Coordinator agent treats Intake, Matching and Dispatch as tools it can call in whatever order and however many times it decides — not a fixed pipeline. It also decides whether to commit, retry, or flag the case for a human. |
 | Structured output (more) | [`agents/schemas.py`](pantrypilot/agents/schemas.py) | `OfferDetails`, `DispatchPlan`, `CaseUpdate` — every specialist's answer is a validated Pydantic object. |
 | Background execution | [`worker/`](pantrypilot/worker/README.md) | An APScheduler timer (not a request handler) wakes the agent team up on its own every 15 seconds — nobody has to click a button. |
+| Sessions | [`agents/sessions.py`](pantrypilot/agents/sessions.py) | A `FileSessionManager` per offer, so the Coordinator's own prior reasoning survives a decline, a timeout, or the worker process restarting — verified live: a second, independently-built `Agent` object correctly recalled a fact from the first one's conversation. |
 
-*More arrives with interrupts (Step 11), sessions, and tracing (Steps 10, 13).*
+*More arrives with interrupts and tracing (Steps 11, 13).*
 
 ## License
 

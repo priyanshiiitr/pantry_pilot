@@ -15,13 +15,30 @@ from pantrypilot import database
 from pantrypilot.agents.coordinator_agent import build_coordinator_agent
 from pantrypilot.agents.hooks.reasoning_log_hook import ReasoningLogHook
 from pantrypilot.agents.schemas import CaseUpdate
+from pantrypilot.agents.sessions import build_offer_session_manager
 from pantrypilot.models import Offer, RunTrigger
 from pantrypilot.services.activity_log import finish_agent_run, log_event, start_agent_run
 from pantrypilot.services.offers import claim_offer_for_agent, set_agent_summary
 
+DEFAULT_TASK_TEMPLATE = (
+    "Handle surplus food offer #{offer_id} end to end: understand it, find it a "
+    "pantry, and get a driver moving — or explain clearly why you couldn't."
+)
 
-def run_case(offer_id: int, trigger: str = RunTrigger.MANUAL, model: Model | None = None) -> CaseUpdate:
+
+def run_case(
+    offer_id: int,
+    trigger: str = RunTrigger.MANUAL,
+    model: Model | None = None,
+    context_message: str | None = None,
+) -> CaseUpdate:
     """Run the full agent team on one offer and return the Coordinator's final report.
+
+    Pass `context_message` to tell the Coordinator something specific instead of
+    the generic opening prompt — e.g. "Driver Sam declined: car trouble. Find
+    another solution." (see worker/jobs.py, which builds this from the note left
+    by requeue_offer_for_retry). Its per-offer session (agents/sessions.py) also
+    remembers the earlier attempt on its own either way.
 
     Raises ValueError if the offer doesn't exist. Any other failure during the
     agent run is recorded on the agent_runs row and re-raised.
@@ -34,14 +51,13 @@ def run_case(offer_id: int, trigger: str = RunTrigger.MANUAL, model: Model | Non
 
     run_id = start_agent_run(trigger=trigger, offer_id=offer_id)
     hook = ReasoningLogHook(run_id=run_id, offer_id=offer_id, agent_name="coordinator")
-    agent = build_coordinator_agent(offer_id, run_id, model=model, hooks=[hook])
+    session_manager = build_offer_session_manager(offer_id)
+    agent = build_coordinator_agent(offer_id, run_id, model=model, hooks=[hook], session_manager=session_manager)
+
+    task = context_message or DEFAULT_TASK_TEMPLATE.format(offer_id=offer_id)
 
     try:
-        result = agent(
-            f"Handle surplus food offer #{offer_id} end to end: understand it, find it a "
-            "pantry, and get a driver moving — or explain clearly why you couldn't.",
-            structured_output_model=CaseUpdate,
-        )
+        result = agent(task, structured_output_model=CaseUpdate)
     except Exception as error:
         finish_agent_run(run_id, stop_reason="error", error=str(error))
         raise

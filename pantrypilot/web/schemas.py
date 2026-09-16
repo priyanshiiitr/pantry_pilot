@@ -12,7 +12,7 @@ from typing import Any, Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
 
 from pantrypilot.database import utc_now
-from pantrypilot.models import DIETARY_RESTRICTIONS, Offer, User
+from pantrypilot.models import DIETARY_RESTRICTIONS, Delivery, DispatchRequest, Offer, User
 
 # Only these three roles can sign up through the form. Admin accounts are only
 # ever created by the seed script — see pantrypilot/services/accounts.py.
@@ -336,3 +336,108 @@ class AgentLogEntryOut(BaseModel):
     summary: str
     details: dict[str, Any] | None
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Pantry deliveries, driver dispatch requests and trips (Step 10)
+# ---------------------------------------------------------------------------
+
+
+class DeclineRequest(BaseModel):
+    """Body of a decline endpoint — always requires saying why."""
+
+    reason: str
+
+    _check_reason = field_validator("reason")(_not_blank)
+
+
+class PantryDeliveryOut(BaseModel):
+    """A delivery as the pantry sees it: what's coming, from where, and why it was chosen."""
+
+    id: int
+    offer_id: int
+    offer_title: str
+    restaurant_name: str
+    quantity_text: str
+    kg: float
+    status: str
+    pantry_response: str
+    match_reasoning: str
+    created_at: datetime
+
+    @classmethod
+    def from_delivery(cls, delivery: Delivery) -> "PantryDeliveryOut":
+        """Build this from a Delivery row, pulling offer/restaurant details off the relationships."""
+        return cls(
+            id=delivery.id,
+            offer_id=delivery.offer_id,
+            offer_title=delivery.offer.title,
+            restaurant_name=delivery.offer.restaurant.name,
+            quantity_text=delivery.offer.quantity_text,
+            kg=delivery.kg,
+            status=delivery.status,
+            pantry_response=delivery.pantry_response,
+            match_reasoning=delivery.match_reasoning,
+            created_at=delivery.created_at,
+        )
+
+
+class DriverDispatchRequestOut(BaseModel):
+    """A pickup request as the driver sees it: where from, where to, and why they were picked."""
+
+    id: int
+    delivery_id: int
+    offer_title: str
+    restaurant_name: str
+    restaurant_address: str
+    pantry_name: str
+    pantry_address: str
+    status: str
+    dispatch_reasoning: str
+    sent_at: datetime
+
+    @classmethod
+    def from_request(cls, request: DispatchRequest) -> "DriverDispatchRequestOut":
+        """Build this from a DispatchRequest row, pulling details off its relationships."""
+        delivery = request.delivery
+        return cls(
+            id=request.id,
+            delivery_id=delivery.id,
+            offer_title=delivery.offer.title,
+            restaurant_name=delivery.offer.restaurant.name,
+            restaurant_address=delivery.offer.restaurant.address,
+            pantry_name=delivery.pantry.name,
+            pantry_address=delivery.pantry.address,
+            status=request.status,
+            dispatch_reasoning=delivery.dispatch_reasoning,
+            sent_at=request.sent_at,
+        )
+
+
+class DriverTripOut(BaseModel):
+    """One of a driver's assigned trips: pickup and drop-off details, and its status."""
+
+    id: int
+    offer_id: int
+    offer_title: str
+    restaurant_name: str
+    restaurant_address: str
+    pantry_name: str
+    pantry_address: str
+    status: str
+    kg: float
+
+    @classmethod
+    def from_delivery(cls, delivery: Delivery) -> "DriverTripOut":
+        """Build this from a Delivery row, pulling offer/pantry details off the relationships."""
+        return cls(
+            id=delivery.id,
+            offer_id=delivery.offer_id,
+            offer_title=delivery.offer.title,
+            restaurant_name=delivery.offer.restaurant.name,
+            restaurant_address=delivery.offer.restaurant.address,
+            pantry_name=delivery.pantry.name,
+            pantry_address=delivery.pantry.address,
+            status=delivery.status,
+            kg=delivery.kg,
+        )

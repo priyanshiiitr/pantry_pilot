@@ -479,3 +479,65 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* --- Delivery / dispatch request cards (Step 10) --- */
+
+.delivery-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.delivery-card {
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.delivery-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.agent-reason {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 0.88rem;
+}
+
+.agent-reason-label {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.decline-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.decline-form input {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--surface);
+  color: var(--text);
+  min-width: 180px;
+}
+
+.button-danger {
+  background: var(--bad);
+  border-color: var(--bad);
+}

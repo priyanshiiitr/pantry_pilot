@@ -1,34 +1,23 @@
-"""Creating and listing surplus food offers, and the actions an agent can take on
-one: claiming it to work on, assigning a pantry, dispatching a driver, cancelling,
-or flagging it for a human.
+"""Creating and listing surplus food offers, and the offer-level actions an
+agent can take: claiming it to work on, cancelling, flagging for a human, or
+putting it back in the queue after a decline/timeout.
+
+Delivery-specific actions (assigning a pantry, pantry accept/decline, pickup/
+delivered) live in services/deliveries.py. Driver-dispatch actions (asking a
+driver, accept/decline/expire) live in services/dispatch.py. This file only
+ever touches the Offer row itself.
 
 DETERMINISTIC CODE: no AI involved. These functions just apply a decision that was
 already made (by a human posting an offer, or by an agent choosing a pantry/driver)
 to the database. Which pantry or driver to pick is decided in agents/, never here.
 """
 
-from datetime import timedelta
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from pantrypilot.database import utc_now
-from pantrypilot.models import (
-    Delivery,
-    DeliveryStatus,
-    Driver,
-    DispatchRequest,
-    DispatchStatus,
-    Offer,
-    OfferStatus,
-    Pantry,
-    Restaurant,
-)
+from pantrypilot.models import Offer, OfferStatus, Restaurant
 from pantrypilot.web.schemas import OfferCreate
-
-# How long a driver has to accept/decline before the worker (Step 9) treats a
-# dispatch request as expired and moves on to another driver.
-DISPATCH_REQUEST_WINDOW = timedelta(minutes=15)
 
 
 def create_offer(session: Session, restaurant: Restaurant, payload: OfferCreate) -> Offer:
@@ -59,9 +48,7 @@ def list_offers_for_restaurant(session: Session, restaurant: Restaurant) -> list
 
 def get_offer_for_restaurant(session: Session, restaurant: Restaurant, offer_id: int) -> Offer:
     """Return one of this restaurant's own offers, or raise LookupError if it isn't theirs."""
-    offer = session.scalar(
-        select(Offer).where(Offer.id == offer_id, Offer.restaurant_id == restaurant.id)
-    )
+    offer = session.scalar(select(Offer).where(Offer.id == offer_id, Offer.restaurant_id == restaurant.id))
     if offer is None:
         raise LookupError(f"No offer {offer_id} for restaurant {restaurant.id}.")
     return offer
@@ -88,41 +75,20 @@ def set_agent_summary(session: Session, offer: Offer, summary: str) -> None:
     session.commit()
 
 
-def get_latest_delivery(session: Session, offer_id: int) -> Delivery | None:
-    """Return the most recently created delivery plan for this offer, if any."""
-    return session.scalar(
-        select(Delivery).where(Delivery.offer_id == offer_id).order_by(Delivery.created_at.desc(), Delivery.id.desc())
-    )
+def requeue_offer_for_retry(session: Session, offer: Offer, note: str) -> None:
+    """Put a partly-worked offer back in the queue for the agent team to reconsider.
 
-
-def assign_delivery(session: Session, offer: Offer, pantry: Pantry, reason: str) -> Delivery:
-    """Record the agent's choice of pantry for this offer, as a new Delivery.
-
-    This does NOT move the offer to "driver_requested" yet — that happens once a
-    driver is actually asked, via send_dispatch_request. Until then the delivery
-    sits as PLANNED: a pantry is chosen, but nobody has been asked to drive yet.
+    Used when a pantry declines, a driver declines, or a driver never responds in
+    time. The worker's normal "pick up new offers" check (every 15s, see
+    worker/jobs.py) finds it again — `note` is saved as the offer's summary and
+    also becomes the context the Coordinator is told about when it resumes, so it
+    doesn't have to guess why it's looking at this offer again. Its per-offer
+    session (agents/sessions.py) also remembers the earlier attempt on its own.
     """
-    delivery = Delivery(offer=offer, pantry=pantry, status=DeliveryStatus.PLANNED, match_reasoning=reason)
-    session.add(delivery)
+    offer.status = OfferStatus.POSTED
+    offer.claimed_at = None
+    offer.agent_summary = note
     session.commit()
-    session.refresh(delivery)
-    return delivery
-
-
-def send_dispatch_request(session: Session, delivery: Delivery, driver: Driver, reason: str) -> DispatchRequest:
-    """Ask `driver` to do the pickup for `delivery`, and move the offer/delivery
-    into the driver_requested state."""
-    request = DispatchRequest(delivery=delivery, driver=driver, expires_at=utc_now() + DISPATCH_REQUEST_WINDOW)
-    # Add `request` to the session BEFORE touching delivery.offer below: reading that
-    # relationship can trigger SQLAlchemy's autoflush, which would otherwise try to
-    # flush `request` while it's linked in-memory but not yet tracked by the session.
-    session.add(request)
-    delivery.status = DeliveryStatus.DRIVER_REQUESTED
-    delivery.dispatch_reasoning = reason
-    delivery.offer.status = OfferStatus.DRIVER_REQUESTED
-    session.commit()
-    session.refresh(request)
-    return request
 
 
 def flag_needs_human(session: Session, offer: Offer, reason: str) -> None:

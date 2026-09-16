@@ -11,12 +11,13 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from pantrypilot.agents.console import ensure_utf8_console
 from pantrypilot.database import create_tables
-from pantrypilot.worker.jobs import pick_up_new_offers
+from pantrypilot.worker.jobs import expire_stale_dispatch_requests, pick_up_new_offers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 CHECK_INTERVAL_SECONDS = 15
+EXPIRY_CHECK_INTERVAL_SECONDS = 30
 
 
 def main() -> None:
@@ -36,10 +37,19 @@ def main() -> None:
         id="pick_up_new_offers",
         max_instances=1,  # never run a second check while one is still in progress
     )
+    scheduler.add_job(
+        expire_stale_dispatch_requests,
+        "interval",
+        seconds=EXPIRY_CHECK_INTERVAL_SECONDS,
+        id="expire_stale_dispatch_requests",
+        max_instances=1,
+    )
 
     logger.info(
-        "PantryPilot worker started — checking for new offers every %s seconds. Press Ctrl+C to stop.",
+        "PantryPilot worker started — checking for new offers every %s seconds, "
+        "expired pickup requests every %s seconds. Press Ctrl+C to stop.",
         CHECK_INTERVAL_SECONDS,
+        EXPIRY_CHECK_INTERVAL_SECONDS,
     )
     try:
         scheduler.start()

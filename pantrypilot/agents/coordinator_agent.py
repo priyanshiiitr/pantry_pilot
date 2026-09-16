@@ -19,14 +19,13 @@ from typing import Any
 from strands import Agent, tool
 from strands.hooks import HookProvider
 from strands.models import Model
+from strands.session import SessionManager
 from strands.types.tools import AgentTool
 
 from pantrypilot.agents.dispatch_agent import propose_dispatch
-from pantrypilot.agents.hooks.reasoning_log_hook import ReasoningLogHook
 from pantrypilot.agents.intake_agent import run_intake_case
 from pantrypilot.agents.matching_agent import propose_match
 from pantrypilot.agents.model_provider import build_model
-from pantrypilot.agents.schemas import CaseUpdate
 from pantrypilot.agents.tools.action_tools import build_action_tools, notify_user
 from pantrypilot.agents.tools.memory_tools import recall_facts, remember_fact
 
@@ -67,9 +66,19 @@ def _build_specialist_tools(offer_id: int, run_id: int) -> list[AgentTool]:
 
 
 def build_coordinator_agent(
-    offer_id: int, run_id: int, model: Model | None = None, hooks: list[HookProvider] | None = None
+    offer_id: int,
+    run_id: int,
+    model: Model | None = None,
+    hooks: list[HookProvider] | None = None,
+    session_manager: SessionManager | None = None,
 ) -> Agent:
-    """Construct the Coordinator agent for one offer/run."""
+    """Construct the Coordinator agent for one offer/run.
+
+    Pass `session_manager` (see agents/sessions.py) so the agent remembers its
+    own earlier conversation about this offer across separate run_case() calls
+    — e.g. it recalls exactly what it already tried when a driver declines and
+    the worker wakes it up again.
+    """
     tools = [
         *_build_specialist_tools(offer_id, run_id),
         *build_action_tools(offer_id),
@@ -83,4 +92,5 @@ def build_coordinator_agent(
         system_prompt=COORDINATOR_SYSTEM_PROMPT,
         tools=tools,
         hooks=hooks or [],
+        session_manager=session_manager,
     )

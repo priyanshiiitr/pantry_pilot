@@ -1,8 +1,9 @@
-"""Tests for the deterministic offer-action functions added in Step 8
-(services/offers.py: claim/assign/dispatch/flag/cancel) and notifications.
+"""Tests for the deterministic offer-level functions (services/offers.py) and
+notifications.
 
 No AI involved — these are the functions an agent's action tools call once a
-decision has already been made.
+decision has already been made. Delivery-specific tests live in
+test_deliveries.py, driver-dispatch tests in test_dispatch.py.
 """
 
 from datetime import timedelta
@@ -10,25 +11,13 @@ from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from pantrypilot.database import utc_now
-from pantrypilot.models import (
-    DeliveryStatus,
-    Driver,
-    Notification,
-    Offer,
-    OfferStatus,
-    Pantry,
-    Restaurant,
-    Role,
-    User,
-)
+from pantrypilot.models import Notification, Offer, OfferStatus, Restaurant, Role, User
 from pantrypilot.services.notifications import notify_user
 from pantrypilot.services.offers import (
-    assign_delivery,
     cancel_offer,
     claim_offer_for_agent,
     flag_needs_human,
-    get_latest_delivery,
-    send_dispatch_request,
+    requeue_offer_for_retry,
     set_agent_summary,
 )
 
@@ -38,29 +27,15 @@ def make_offer(db_session: Session) -> Offer:
     user = User(email="r@test.local", role=Role.RESTAURANT, display_name="R", password_hash="x")
     restaurant = Restaurant(user=user, name="R", address="x", lat=47.6, lon=-122.3)
     offer = Offer(
-        restaurant=restaurant, title="T", description="D", quantity_text="Q", pickup_deadline=utc_now() + timedelta(hours=2)
+        restaurant=restaurant,
+        title="T",
+        description="D",
+        quantity_text="Q",
+        pickup_deadline=utc_now() + timedelta(hours=2),
     )
     db_session.add_all([user, restaurant, offer])
     db_session.commit()
     return offer
-
-
-def make_pantry(db_session: Session, email: str = "p@test.local") -> Pantry:
-    """Create a minimal pantry. Pass a distinct `email` when creating more than one."""
-    user = User(email=email, role=Role.PANTRY, display_name="P", password_hash="x")
-    pantry = Pantry(user=user, name="P", address="x", lat=47.6, lon=-122.3)
-    db_session.add_all([user, pantry])
-    db_session.commit()
-    return pantry
-
-
-def make_driver(db_session: Session) -> Driver:
-    """Create a minimal driver."""
-    user = User(email="d@test.local", role=Role.DRIVER, display_name="D", password_hash="x")
-    driver = Driver(user=user, name="D", lat=47.6, lon=-122.3)
-    db_session.add_all([user, driver])
-    db_session.commit()
-    return driver
 
 
 def test_claim_offer_for_agent_sets_status_and_timestamp(db_session: Session) -> None:
@@ -82,45 +57,16 @@ def test_set_agent_summary_saves_the_text(db_session: Session) -> None:
     assert offer.agent_summary == "Matched with Hope Community Pantry."
 
 
-def test_assign_delivery_creates_a_planned_delivery(db_session: Session) -> None:
-    """Assigning a pantry creates a Delivery in PLANNED status, without touching offer.status."""
+def test_requeue_offer_for_retry_puts_it_back_to_posted(db_session: Session) -> None:
+    """Requeuing clears the claim and saves a note explaining why it's back."""
     offer = make_offer(db_session)
-    pantry = make_pantry(db_session)
+    claim_offer_for_agent(db_session, offer)
 
-    delivery = assign_delivery(db_session, offer, pantry, "Closest pantry with fridge capacity.")
+    requeue_offer_for_retry(db_session, offer, "Driver Sam declined the pickup: car trouble.")
 
-    assert delivery.status == DeliveryStatus.PLANNED
-    assert delivery.pantry_id == pantry.id
-    assert delivery.match_reasoning == "Closest pantry with fridge capacity."
-    assert offer.status == OfferStatus.POSTED  # unchanged until a driver is asked
-
-
-def test_get_latest_delivery_returns_the_newest_one(db_session: Session) -> None:
-    """When an offer has been re-planned, get_latest_delivery returns the most recent attempt."""
-    offer = make_offer(db_session)
-    pantry_a = make_pantry(db_session, email="pa@test.local")
-    pantry_b = make_pantry(db_session, email="pb@test.local")
-    assign_delivery(db_session, offer, pantry_a, "first attempt")
-    second = assign_delivery(db_session, offer, pantry_b, "re-planned")
-
-    latest = get_latest_delivery(db_session, offer.id)
-
-    assert latest.id == second.id
-
-
-def test_send_dispatch_request_moves_offer_and_delivery_to_driver_requested(db_session: Session) -> None:
-    """Asking a driver moves both the delivery and the offer into driver_requested."""
-    offer = make_offer(db_session)
-    pantry = make_pantry(db_session)
-    driver = make_driver(db_session)
-    delivery = assign_delivery(db_session, offer, pantry, "reason")
-
-    request = send_dispatch_request(db_session, delivery, driver, "Nearest available driver.")
-
-    assert request.driver_id == driver.id
-    assert delivery.status == DeliveryStatus.DRIVER_REQUESTED
-    assert offer.status == OfferStatus.DRIVER_REQUESTED
-    assert delivery.dispatch_reasoning == "Nearest available driver."
+    assert offer.status == OfferStatus.POSTED
+    assert offer.claimed_at is None
+    assert "Sam declined" in offer.agent_summary
 
 
 def test_flag_needs_human_sets_status_and_summary(db_session: Session) -> None:

@@ -20,6 +20,8 @@ from strands.types.tools import AgentTool
 
 from pantrypilot import database
 from pantrypilot.models import Driver, Offer, Pantry
+from pantrypilot.services import deliveries as deliveries_service
+from pantrypilot.services import dispatch as dispatch_service
 from pantrypilot.services import offers as offers_service
 from pantrypilot.services.notifications import notify_user as notify_user_service
 
@@ -43,7 +45,7 @@ def build_action_tools(offer_id: int) -> list[AgentTool]:
             if offer is None or pantry is None:
                 return {"error": f"offer {offer_id} or pantry {pantry_id} not found"}
 
-            delivery = offers_service.assign_delivery(session, offer, pantry, reason)
+            delivery = deliveries_service.assign_delivery(session, offer, pantry, reason)
             notify_user_service(session, pantry.user_id, f'New delivery incoming: "{offer.title}" — {reason}')
             return {"delivery_id": delivery.id, "status": delivery.status}
 
@@ -57,14 +59,14 @@ def build_action_tools(offer_id: int) -> list[AgentTool]:
             reason: why this driver (shown to the driver and restaurant).
         """
         with database.SessionLocal() as session:
-            delivery = offers_service.get_latest_delivery(session, offer_id)
+            delivery = deliveries_service.get_latest_delivery(session, offer_id)
             driver = session.get(Driver, driver_id)
             if delivery is None:
                 return {"error": f"no delivery planned yet for offer {offer_id} — call assign_delivery first"}
             if driver is None:
                 return {"error": f"driver {driver_id} not found"}
 
-            request = offers_service.send_dispatch_request(session, delivery, driver, reason)
+            request = dispatch_service.send_dispatch_request(session, delivery, driver, reason)
             notify_user_service(session, driver.user_id, f'New pickup request: "{delivery.offer.title}" — {reason}')
             return {"dispatch_request_id": request.id, "status": request.status}
 
