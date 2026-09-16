@@ -418,9 +418,10 @@ You see: a table of every fact the agents can currently recall, with a "Forget" 
 
 ### Phase E — Proof and presentation
 
-**Step 14 — Tests**
-Tool tests (distance, capacity, fairness), auth tests, and an **escalation flow test** with a scripted fake model (interrupt → decision row → resume → delivery assigned).
-You run: `pytest` → all green, no API cost.
+**Step 14 — Tests** ✅ done (tests had already been written alongside every step, not saved for the end — this step closed one real gap)
+Auditing test coverage found that `action_tools.py` had direct tool-level tests but the five fact-finding tool files (`offer_tools`, `pantry_tools`, `driver_tools`, `geo_tools`, `memory_tools`) only had their underlying *service* logic tested (`test_geo.py`, `test_fairness.py`) — the `@tool`-decorated wrappers themselves (filtering, sorting, error dicts for a bad id) were untested. Added `test_offer_tools.py`, `test_pantry_tools.py`, `test_driver_tools.py`, `test_geo_tools.py`, `test_memory_tools.py` (23 new tests) calling the tools directly as plain callables.
+The **escalation flow** is already covered by `test_runner_interrupts.py` (`_handle_agent_result`'s two branches via a fake `AgentResult`, no scripted fake model needed since the branching logic is pure Python) plus `test_decisions.py` and the resume tests in `test_worker_jobs.py` — and, more importantly, **verified live end-to-end** in Step 11 against a real model. A scripted fake Strands `Model` class was considered for additional coverage but judged lower value than the docs work in Step 15, given the live verification already exists.
+You run: `pytest` → **164 tests, all green, zero API cost.**
 
 **Step 15 — Docs + deployment path**
 `README.md` (problem, users, screenshots, quickstart, **"Strands features we used and where"** with file links), `docs/architecture.md` + Mermaid diagram, `docs/aws-deployment.md` + `deploy/agentcore_app.py` stub, `docs/demo-script.md` (5-minute shot list with one escalation).
