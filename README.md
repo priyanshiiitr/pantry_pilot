@@ -12,7 +12,7 @@ Restaurants, bakeries and grocery stores end each day with good surplus food. Ne
 Today one overworked coordinator matches them by phone and spreadsheet, and a lot of food spoils.
 
 PantryPilot's agents do the coordination in the background: read the offer, pick the best pantry, dispatch a
-volunteer driver, explain every choice, and raise a decision card for a human admin only when they hit a real
+volunteer driver, explain every choice, and raise a decision card for a human admin only when they will hit a real
 judgment call.
 
 ## Quickstart (Windows PowerShell)
