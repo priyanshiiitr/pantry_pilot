@@ -95,6 +95,13 @@ Wait for the deploy, then check `https://<your-api>.onrender.com/api/health`.
 
 1. Vercel → **Add New → Project** → same repo.
 2. Set **Root Directory** to `frontend`. Vercel reads `frontend/vercel.json`.
+
+   That file's one interesting line is the rewrite sending every non-asset path
+   to `index.html`. React Router owns the URLs, so without it, opening
+   `/admin/decisions` directly — or just refreshing on it — asks Vercel for a
+   file that doesn't exist and returns 404. Note that Vercel validates
+   `vercel.json` strictly and rejects unknown keys, including any attempt to
+   leave a comment inside a rewrite.
 3. Add one environment variable:
 
    ```

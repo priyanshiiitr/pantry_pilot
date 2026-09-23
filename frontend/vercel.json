@@ -3,11 +3,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "rewrites": [
-    {
-      "comment": "React Router owns the URLs. Without this, opening /admin/decisions directly (or refreshing on it) asks Vercel for a file that doesn't exist and returns 404 — every route has to be served index.html and resolved in the browser.",
-      "source": "/((?!assets/).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
 }
