@@ -57,6 +57,25 @@ class ViewAsRequest(BaseModel):
     user_id: int | None = None
 
 
+class OfferStageOut(BaseModel):
+    """One of the five stages an offer moves through (services/progress.py).
+
+    `state` is one of: done, active, blocked (waiting on a human), waiting.
+    """
+
+    key: str
+    name: str
+    state: str
+    detail: str
+
+
+class OfferProgressOut(BaseModel):
+    """Where an offer has got to, plus the agent activity that got it there."""
+
+    stages: list[OfferStageOut]
+    entries: list["AgentLogEntryOut"]
+
+
 class SwitchableAccountOut(BaseModel):
     """One account an admin can preview, and how much work is waiting on it."""
 

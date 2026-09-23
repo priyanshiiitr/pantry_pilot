@@ -12,10 +12,13 @@ from pantrypilot.models import Role, User
 from pantrypilot.services.activity_log import list_log_entries_for_offer
 from pantrypilot.services.offers import create_offer, get_offer_for_restaurant, list_offers_for_restaurant
 from pantrypilot.services.profiles import get_restaurant_for_user
+from pantrypilot.services.progress import get_offer_progress
 from pantrypilot.web.schemas import (
     AgentLogEntryOut,
     OfferCreate,
     OfferOut,
+    OfferProgressOut,
+    OfferStageOut,
     RestaurantProfileIn,
     RestaurantProfileOut,
 )
@@ -82,18 +85,26 @@ def get_offer_route(
     return OfferOut.model_validate(offer)
 
 
-@router.get("/offers/{offer_id}/activity", response_model=list[AgentLogEntryOut])
+@router.get("/offers/{offer_id}/activity", response_model=OfferProgressOut)
 def get_offer_activity_route(
     offer_id: int, user: User = Depends(require_role(Role.RESTAURANT)), db: Session = Depends(get_db)
-) -> list[AgentLogEntryOut]:
-    """What the agents have done on this offer so far, oldest first.
+) -> OfferProgressOut:
+    """Where this offer has got to, and everything the agents did getting there.
+
+    Returned together because the page shows them together: two separate polls
+    could disagree, showing a stage as done while the log that proves it hasn't
+    arrived yet.
 
     Scoped through get_offer_for_restaurant so a restaurant can only ever read
-    the activity on its own offers.
+    its own offers.
     """
     restaurant = get_restaurant_for_user(db, user)
     try:
         get_offer_for_restaurant(db, restaurant, offer_id)
     except LookupError as error:
         raise HTTPException(status_code=404, detail="Offer not found.") from error
-    return [AgentLogEntryOut.model_validate(entry) for entry in list_log_entries_for_offer(db, offer_id)]
+
+    return OfferProgressOut(
+        stages=[OfferStageOut(**stage) for stage in get_offer_progress(db, offer_id)],
+        entries=[AgentLogEntryOut.model_validate(entry) for entry in list_log_entries_for_offer(db, offer_id)],
+    )

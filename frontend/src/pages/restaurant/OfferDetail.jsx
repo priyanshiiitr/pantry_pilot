@@ -13,6 +13,9 @@ const WAITING_MESSAGES = {
 };
 const DEFAULT_WAITING_MESSAGE = "No update from the agent team yet.";
 
+// The marker drawn against each stage, by its state (see services/progress.py).
+const STAGE_MARKS = { done: "✓", active: "◍", blocked: "⚑", waiting: "○" };
+
 /** OfferDetail — one offer's full details and live status, for the restaurant that posted it. */
 export default function OfferDetail() {
   const { offerId } = useParams();
@@ -64,32 +67,53 @@ export default function OfferDetail() {
  * indistinguishable from a crash when a run legitimately takes minutes.
  */
 function AgentProgress({ offerId, status }) {
-  const { data: entries } = usePolling(() => apiGet(`/api/restaurant/offers/${offerId}/activity`), 3000, [offerId]);
+  const { data } = usePolling(() => apiGet(`/api/restaurant/offers/${offerId}/activity`), 3000, [offerId]);
 
-  if (!entries || entries.length === 0) {
-    return null;
-  }
+  if (!data) return null;
 
   return (
-    <section className="panel" style={{ marginTop: 20 }}>
-      <div className="panel-header">
-        <h2>What the agents are doing</h2>
-        {status === "agent_working" && <span className="live-dot">working now</span>}
-      </div>
-      <div className="feed">
-        {entries.map((entry) => (
-          <div className="feed-row" key={entry.id}>
-            <span className="feed-time">{new Date(entry.created_at).toLocaleTimeString()}</span>
-            <span className="feed-icon is-agent" aria-hidden="true">
-              ◈
-            </span>
-            <span className="feed-body">
-              <div className="feed-title">{entry.tool_name ?? entry.agent_name}</div>
-              <div className="feed-detail">{entry.summary}</div>
-            </span>
+    <>
+      <section className="panel" style={{ marginTop: 20 }}>
+        <div className="panel-header">
+          <h2>Progress</h2>
+          {status === "agent_working" && <span className="live-dot">agents working now</span>}
+        </div>
+        <ol className="stage-track">
+          {data.stages.map((stage) => (
+            <li className={`stage stage-${stage.state}`} key={stage.key}>
+              <span className="stage-marker" aria-hidden="true">
+                {STAGE_MARKS[stage.state]}
+              </span>
+              <span className="stage-body">
+                <span className="stage-name">{stage.name}</span>
+                <span className="stage-detail">{stage.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {data.entries.length > 0 && (
+        <section className="panel" style={{ marginTop: 20 }}>
+          <div className="panel-header">
+            <h2>What the agents did</h2>
           </div>
-        ))}
-      </div>
-    </section>
+          <div className="feed">
+            {data.entries.map((entry) => (
+              <div className="feed-row" key={entry.id}>
+                <span className="feed-time">{new Date(entry.created_at).toLocaleTimeString()}</span>
+                <span className="feed-icon is-agent" aria-hidden="true">
+                  ◈
+                </span>
+                <span className="feed-body">
+                  <div className="feed-title">{entry.tool_name ?? entry.agent_name}</div>
+                  <div className="feed-detail">{entry.summary}</div>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
   );
 }

@@ -171,7 +171,7 @@ def test_restaurant_sees_the_agents_progress_on_its_own_offer(client: TestClient
     response = client.get(f"/api/restaurant/offers/{created['id']}/activity")
 
     assert response.status_code == 200
-    assert [entry["summary"] for entry in response.json()] == ["Checking 7 nearby pantries"]
+    assert [entry["summary"] for entry in response.json()["entries"]] == ["Checking 7 nearby pantries"]
 
 
 def test_agent_progress_is_scoped_to_the_offers_owner(client: TestClient) -> None:
@@ -186,11 +186,17 @@ def test_agent_progress_is_scoped_to_the_offers_owner(client: TestClient) -> Non
 
 
 def test_agent_progress_is_empty_before_the_agents_start(client: TestClient) -> None:
-    """A brand-new offer has no activity yet — an empty list, not an error."""
+    """A brand-new offer has no activity yet — an empty list, not an error.
+
+    The five stages are still returned, all of them "waiting": the tracker shows
+    the whole journey from the moment the offer is posted, rather than appearing
+    a step at a time.
+    """
     signup_and_login(client, "restaurant", "deli@example.com")
     created = client.post("/api/restaurant/offers", json=make_offer_payload()).json()
 
     response = client.get(f"/api/restaurant/offers/{created['id']}/activity")
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["entries"] == []
+    assert len(response.json()["stages"]) == 5
