@@ -54,8 +54,15 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> list[str]:
-        """frontend_origins split into a list, blanks removed."""
-        return [origin.strip() for origin in self.frontend_origins.split(",") if origin.strip()]
+        """frontend_origins split into a list, blanks removed and trailing slashes stripped.
+
+        A browser's Origin header is scheme://host:port with no path, so a value
+        configured as "https://example.com/" never matches and CORS silently
+        fails. Copying a site's URL out of the address bar gives you that slash,
+        and nothing in the error says so — the app just looks permanently logged
+        out. Cheaper to normalise here than to diagnose again.
+        """
+        return [origin.strip().rstrip("/") for origin in self.frontend_origins.split(",") if origin.strip()]
 
     # --- Demo city ---
     # Pantry opening hours and driver availability are written in this city's local time.

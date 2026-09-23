@@ -105,3 +105,28 @@ def test_the_endpoint_is_disabled_when_no_secret_is_configured(
 
     assert response.status_code == 503
     assert no_jobs_run == []
+
+
+def test_a_trailing_slash_in_a_configured_origin_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Copying a URL from the address bar gives you a trailing slash.
+
+    A browser's Origin header is scheme://host:port with no path, so the two
+    never match and CORS fails silently — the deployed site just looks
+    permanently logged out, with nothing in the error naming the cause.
+    """
+    monkeypatch.setattr(settings, "frontend_origins", "https://app.vercel.app/, https://other.app/ ")
+
+    assert settings.allowed_origins == ["https://app.vercel.app", "https://other.app"]
+
+
+def test_origins_without_slashes_are_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "frontend_origins", "https://app.vercel.app")
+
+    assert settings.allowed_origins == ["https://app.vercel.app"]
+
+
+def test_no_configured_origins_means_no_cors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Local development proxies /api, so CORS shouldn't be involved at all."""
+    monkeypatch.setattr(settings, "frontend_origins", "")
+
+    assert settings.allowed_origins == []
