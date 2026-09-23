@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from pantrypilot.database import utc_now
 from pantrypilot.models import (
@@ -245,8 +245,14 @@ def get_recent_network_activity(session: Session, limit: int = 8) -> list[dict[s
     """
     events: list[dict[str, Any]] = []
 
+    # Each event names its restaurant/pantry, which are relationships. Left to
+    # load lazily that is one extra round trip per row — harmless against a local
+    # SQLite file, and 21 queries taking ten seconds against a hosted database.
     recent_offers = session.scalars(
-        select(Offer).order_by(Offer.created_at.desc(), Offer.id.desc()).limit(limit)
+        select(Offer)
+        .options(selectinload(Offer.restaurant))
+        .order_by(Offer.created_at.desc(), Offer.id.desc())
+        .limit(limit)
     )
     for offer in recent_offers:
         events.append(
@@ -261,7 +267,10 @@ def get_recent_network_activity(session: Session, limit: int = 8) -> list[dict[s
         )
 
     recent_deliveries = session.scalars(
-        select(Delivery).order_by(Delivery.created_at.desc(), Delivery.id.desc()).limit(limit)
+        select(Delivery)
+        .options(selectinload(Delivery.offer), selectinload(Delivery.pantry))
+        .order_by(Delivery.created_at.desc(), Delivery.id.desc())
+        .limit(limit)
     )
     for delivery in recent_deliveries:
         events.append(
@@ -287,7 +296,10 @@ def get_recent_network_activity(session: Session, limit: int = 8) -> list[dict[s
             )
 
     recent_decisions = session.scalars(
-        select(Decision).order_by(Decision.created_at.desc(), Decision.id.desc()).limit(limit)
+        select(Decision)
+        .options(selectinload(Decision.offer))
+        .order_by(Decision.created_at.desc(), Decision.id.desc())
+        .limit(limit)
     )
     for decision in recent_decisions:
         events.append(
