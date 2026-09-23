@@ -8,6 +8,10 @@ itsdangerous==2.2.0         # Signs the login cookie so it can't be tampered wit
 pydantic-settings==2.15.0   # Reads settings from the .env file into a typed Python object
 
 # --- Database ---
+# psycopg is only used when DATABASE_URL points at Postgres (i.e. deployed).
+# Locally the default is SQLite, which needs no driver. [binary] ships prebuilt,
+# so no compiler is needed on the host.
+psycopg[binary]==3.2.12    # PostgreSQL driver, for deployment
 sqlalchemy==2.0.52          # Python classes <-> database tables (SQLite now, Postgres later)
 
 tzdata==2026.4              # Time-zone database (Windows doesn't include one) for local opening hours

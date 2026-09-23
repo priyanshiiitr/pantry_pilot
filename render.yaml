@@ -1,0 +1,75 @@
+# Render blueprint for PantryPilot's backend.
+#
+# The React frontend is NOT here — it goes to Vercel (see vercel.json and
+# docs/deployment.md). This file describes the API only.
+#
+# Create this in Render with "New > Blueprint" pointed at the repo, then fill in
+# the values marked sync:false in the dashboard. Nothing secret lives in here.
+
+services:
+  - type: web
+    name: pantrypilot-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Render sets $PORT; binding anywhere else makes the deploy time out waiting
+    # for an open port.
+    startCommand: uvicorn pantrypilot.web.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+
+      - key: DATABASE_URL
+        sync: false # Postgres connection string — see docs/deployment.md
+      - key: SESSION_SECRET
+        generateValue: true # Render generates a strong random value
+      - key: TICK_SECRET
+        generateValue: true # shared with whatever cron drives POST /api/tick
+
+      # The exact Vercel origin, e.g. https://pantrypilot.vercel.app.
+      # A wildcard will not work: the login cookie is a credentialed request,
+      # and browsers require an exact origin for those.
+      - key: FRONTEND_ORIGINS
+        sync: false
+      # Render serves HTTPS, so the login cookie must be SameSite=None; Secure
+      # or the browser drops it on every cross-origin request.
+      - key: SECURE_COOKIES
+        value: "true"
+
+      - key: MODEL_PROVIDER
+        value: groq
+      - key: MODEL_ID
+        value: openai/gpt-oss-120b
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_FALLBACK_API_KEYS
+        sync: false
+
+      # Driver shifts and pantry hours are written in this zone's local time.
+      # Set it to wherever the demo is being given, or the agents will correctly
+      # report that nothing is open.
+      - key: CITY_TIMEZONE
+        sync: false
+      - key: CITY_NAME
+        sync: false
+
+# The agents need something to wake them up. Two options, both documented in
+# docs/deployment.md:
+#
+#   Free:  an external scheduler (cron-job.org, GitHub Actions) POSTs to
+#          /api/tick with the X-Tick-Secret header. Also keeps the free web
+#          service from sleeping.
+#
+#   Paid:  uncomment the worker below ($7/month at the time of writing) to run
+#          the real scheduler as its own always-on process. Same jobs, same
+#          agents — it just doesn't need an outside nudge.
+#
+#  - type: worker
+#    name: pantrypilot-worker
+#    runtime: python
+#    plan: starter
+#    buildCommand: pip install -r requirements.txt
+#    startCommand: python -m pantrypilot.worker
+#    envVars:
+#      - fromGroup: pantrypilot-shared

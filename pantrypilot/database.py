@@ -71,16 +71,34 @@ def _set_sqlite_options(dbapi_connection: Any, _connection_record: Any) -> None:
     cursor.close()
 
 
+def normalise_database_url(database_url: str) -> str:
+    """Point a Postgres URL at the driver we actually install.
+
+    Hosting providers hand out `postgres://` or `postgresql://`, and SQLAlchemy
+    reads both as a request for psycopg2. We install psycopg 3, so without this
+    a deployment fails at startup with "ModuleNotFoundError: psycopg2" — which
+    says nothing useful about the real problem.
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if database_url.startswith(prefix):
+            return "postgresql+psycopg://" + database_url[len(prefix) :]
+    return database_url
+
+
 def build_engine(database_url: str) -> Engine:
     """Create a database engine for the given URL.
 
     For SQLite it also makes sure the folder for the database file exists and
     applies the SQLite options above. Tests call this with a temporary file.
     """
+    database_url = normalise_database_url(database_url)
     is_sqlite = database_url.startswith("sqlite")
     # check_same_thread=False: FastAPI may use the connection from different threads.
     connect_args = {"check_same_thread": False} if is_sqlite else {}
-    new_engine = create_engine(database_url, connect_args=connect_args)
+    # pool_pre_ping: a hosted Postgres drops idle connections, and a free web
+    # service sits idle a lot — without this the first request after a quiet
+    # spell fails on a stale connection.
+    new_engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=not is_sqlite)
 
     if is_sqlite:
         database_file = new_engine.url.database

@@ -34,6 +34,29 @@ class Settings(BaseSettings):
     session_secret: str = "dev-only-secret-change-me"
     database_url: str = DEFAULT_DATABASE_URL
 
+    # Where the frontend is served from, when it isn't the same origin as the API.
+    # Locally the Vite dev server proxies /api, so they look like one site and
+    # this stays empty. Deployed (frontend on Vercel, API on Render) they are two
+    # origins, and the browser needs both CORS permission and a cookie allowed to
+    # travel cross-site. Comma-separated; no wildcard, because credentialed
+    # requests require an exact origin.
+    frontend_origins: str = ""
+
+    # Set true wherever the site is served over HTTPS. It switches the login
+    # cookie to SameSite=None; Secure, without which a cross-origin deployment
+    # silently drops it and every request looks logged out.
+    secure_cookies: bool = False
+
+    # Shared secret for POST /api/tick (web/routes/tick.py), which lets an
+    # external scheduler drive the agents where a long-running worker can't run.
+    # Empty disables the endpoint entirely.
+    tick_secret: str = ""
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        """frontend_origins split into a list, blanks removed."""
+        return [origin.strip() for origin in self.frontend_origins.split(",") if origin.strip()]
+
     # --- Demo city ---
     # Pantry opening hours and driver availability are written in this city's local time.
     city_name: str = "Seattle, WA"

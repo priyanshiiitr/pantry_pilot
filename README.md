@@ -86,6 +86,8 @@ All of this is complete for the hackathon build, including tests (164, all passi
 - [`docs/architecture.md`](docs/architecture.md) — how the three processes and four agents fit together,
   with a sequence diagram of the pause/resume-for-a-human flow.
 - [`docs/demo-script.md`](docs/demo-script.md) — a 5-minute demo shot list, including a live escalation.
+- [`docs/deployment.md`](docs/deployment.md) — deploying it for real today: frontend on Vercel, API on
+  Render, Postgres on Neon, and the two ways to keep the agents waking up on their own.
 - [`docs/aws-deployment.md`](docs/aws-deployment.md) — how each local piece (worker, runner, sessions,
   tracing) maps onto EventBridge, Lambda, AgentCore Runtime, RDS and CloudWatch.
 - [PLAN.md](PLAN.md) — the full build log, step by step, with what was verified live against a real model

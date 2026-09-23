@@ -6,6 +6,18 @@
  */
 
 /**
+ * Where the backend lives.
+ *
+ * Empty in development: the Vite dev server proxies /api to the local backend
+ * (see vite.config.js), so the two look like one site and relative paths work.
+ *
+ * Deployed, the frontend and API are on different hosts, so VITE_API_BASE_URL
+ * must point at the backend — e.g. https://pantrypilot-api.onrender.com. It is
+ * baked in at build time, so changing it means rebuilding, not just restarting.
+ */
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+/**
  * Send a request to the backend and return the parsed JSON body.
  * Throws an Error (with the backend's message, if it sent one) on a non-2xx response.
  *
@@ -15,7 +27,7 @@
  * @returns {Promise<any>}
  */
 async function request(method, path, body) {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     // Sends the login cookie along with the request, and accepts one back.
     credentials: "include",
