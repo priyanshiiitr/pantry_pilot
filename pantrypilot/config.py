@@ -50,7 +50,26 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     groq_api_key: str = ""
+    # Optional extra Groq keys, comma-separated, used only as failover when the
+    # primary key is rate-limited. Groq's free tier caps tokens per *minute* per
+    # key, which a multi-agent run hits easily; see agents/model_provider.py.
+    groq_fallback_api_keys: str = ""
     aws_region: str = "us-east-1"
+
+    @property
+    def groq_api_keys(self) -> list[str]:
+        """Every Groq key to try, primary first, with duplicates and blanks removed.
+
+        Duplicates are dropped deliberately: the same key listed twice shares one
+        rate-limit budget, so retrying it would just burn a retry for nothing.
+        """
+        candidates = [self.groq_api_key, *self.groq_fallback_api_keys.split(",")]
+        unique: list[str] = []
+        for candidate in candidates:
+            key = candidate.strip()
+            if key and key not in unique:
+                unique.append(key)
+        return unique
 
     # --- Tracing (used from Step 13) ---
     otel_console: bool = False
