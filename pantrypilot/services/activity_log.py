@@ -78,3 +78,19 @@ def list_recent_log_entries(session: Session, limit: int = 200) -> list[AgentLog
     """Return the most recent activity log entries, newest first. Used by the admin dashboard."""
     query = select(AgentLog).order_by(AgentLog.created_at.desc(), AgentLog.id.desc()).limit(limit)
     return list(session.scalars(query))
+
+
+def list_log_entries_for_offer(session: Session, offer_id: int, limit: int = 40) -> list[AgentLog]:
+    """Return one offer's agent activity, oldest first, so it reads as a story.
+
+    This is what lets the restaurant that posted an offer watch the agents work
+    instead of staring at a bare "Agent working…" badge. On a free model tier a
+    single run can take minutes, and silence is indistinguishable from a crash.
+    """
+    query = (
+        select(AgentLog)
+        .where(AgentLog.offer_id == offer_id)
+        .order_by(AgentLog.created_at.asc(), AgentLog.id.asc())
+        .limit(limit)
+    )
+    return list(session.scalars(query))

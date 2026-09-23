@@ -9,9 +9,16 @@ from sqlalchemy.orm import Session
 from pantrypilot.auth.current_user import require_role
 from pantrypilot.database import get_db
 from pantrypilot.models import Role, User
+from pantrypilot.services.activity_log import list_log_entries_for_offer
 from pantrypilot.services.offers import create_offer, get_offer_for_restaurant, list_offers_for_restaurant
 from pantrypilot.services.profiles import get_restaurant_for_user
-from pantrypilot.web.schemas import OfferCreate, OfferOut, RestaurantProfileIn, RestaurantProfileOut
+from pantrypilot.web.schemas import (
+    AgentLogEntryOut,
+    OfferCreate,
+    OfferOut,
+    RestaurantProfileIn,
+    RestaurantProfileOut,
+)
 
 router = APIRouter(prefix="/api/restaurant", tags=["restaurant"])
 
@@ -73,3 +80,20 @@ def get_offer_route(
     except LookupError as error:
         raise HTTPException(status_code=404, detail="Offer not found.") from error
     return OfferOut.model_validate(offer)
+
+
+@router.get("/offers/{offer_id}/activity", response_model=list[AgentLogEntryOut])
+def get_offer_activity_route(
+    offer_id: int, user: User = Depends(require_role(Role.RESTAURANT)), db: Session = Depends(get_db)
+) -> list[AgentLogEntryOut]:
+    """What the agents have done on this offer so far, oldest first.
+
+    Scoped through get_offer_for_restaurant so a restaurant can only ever read
+    the activity on its own offers.
+    """
+    restaurant = get_restaurant_for_user(db, user)
+    try:
+        get_offer_for_restaurant(db, restaurant, offer_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail="Offer not found.") from error
+    return [AgentLogEntryOut.model_validate(entry) for entry in list_log_entries_for_offer(db, offer_id)]

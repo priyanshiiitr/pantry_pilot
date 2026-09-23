@@ -147,3 +147,50 @@ def test_restaurant_cannot_see_admin_offers_list(client: TestClient) -> None:
     response = client.get("/api/admin/offers")
 
     assert response.status_code == 403
+
+
+def test_restaurant_sees_the_agents_progress_on_its_own_offer(client: TestClient) -> None:
+    """The offer page's live progress feed.
+
+    Without it a restaurant sees only an "Agent working…" badge, which on a
+    rate-limited free model tier is indistinguishable from a crash.
+    """
+    from pantrypilot.models import AgentLog
+
+    signup_and_login(client, "restaurant", "deli@example.com")
+    created = client.post("/api/restaurant/offers", json=make_offer_payload()).json()
+    with client.session_factory() as session:
+        session.add(
+            AgentLog(
+                offer_id=created["id"], agent_name="matching", event_type="tool_call",
+                tool_name="find_nearby_pantries", summary="Checking 7 nearby pantries",
+            )
+        )
+        session.commit()
+
+    response = client.get(f"/api/restaurant/offers/{created['id']}/activity")
+
+    assert response.status_code == 200
+    assert [entry["summary"] for entry in response.json()] == ["Checking 7 nearby pantries"]
+
+
+def test_agent_progress_is_scoped_to_the_offers_owner(client: TestClient) -> None:
+    """Activity is guarded the same way the offer itself is — by ownership, not by id."""
+    signup_and_login(client, "restaurant", "shop1@example.com")
+    created = client.post("/api/restaurant/offers", json=make_offer_payload()).json()
+    client.post("/api/auth/logout")
+
+    signup_and_login(client, "restaurant", "shop2@example.com")
+
+    assert client.get(f"/api/restaurant/offers/{created['id']}/activity").status_code == 404
+
+
+def test_agent_progress_is_empty_before_the_agents_start(client: TestClient) -> None:
+    """A brand-new offer has no activity yet — an empty list, not an error."""
+    signup_and_login(client, "restaurant", "deli@example.com")
+    created = client.post("/api/restaurant/offers", json=make_offer_payload()).json()
+
+    response = client.get(f"/api/restaurant/offers/{created['id']}/activity")
+
+    assert response.status_code == 200
+    assert response.json() == []

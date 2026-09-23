@@ -50,6 +50,46 @@ export default function OfferDetail() {
           </div>
         </section>
       )}
+
+      <AgentProgress offerId={offerId} status={offer?.status} />
     </AppShell>
+  );
+}
+
+/**
+ * AgentProgress — a live, plain-English trace of what the agents have done on
+ * this offer.
+ *
+ * Without it the restaurant sees only an "Agent working…" badge, which is
+ * indistinguishable from a crash when a run legitimately takes minutes.
+ */
+function AgentProgress({ offerId, status }) {
+  const { data: entries } = usePolling(() => apiGet(`/api/restaurant/offers/${offerId}/activity`), 3000, [offerId]);
+
+  if (!entries || entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="panel" style={{ marginTop: 20 }}>
+      <div className="panel-header">
+        <h2>What the agents are doing</h2>
+        {status === "agent_working" && <span className="live-dot">working now</span>}
+      </div>
+      <div className="feed">
+        {entries.map((entry) => (
+          <div className="feed-row" key={entry.id}>
+            <span className="feed-time">{new Date(entry.created_at).toLocaleTimeString()}</span>
+            <span className="feed-icon is-agent" aria-hidden="true">
+              ◈
+            </span>
+            <span className="feed-body">
+              <div className="feed-title">{entry.tool_name ?? entry.agent_name}</div>
+              <div className="feed-detail">{entry.summary}</div>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
