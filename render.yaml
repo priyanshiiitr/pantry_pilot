@@ -11,6 +11,13 @@ services:
     name: pantrypilot-api
     runtime: python
     plan: free
+    # MUST match the Neon project's region. The admin Overview issues ~23
+    # queries, so the round trip between app and database is multiplied by 23:
+    # measured, a Singapore database answered in ~83ms per query where a Sydney
+    # one took ~407ms. Render defaults to Oregon when this is omitted, which
+    # would put the app an ocean away from a database we deliberately placed in
+    # Singapore.
+    region: singapore
     buildCommand: pip install -r requirements.txt
     # Render sets $PORT; binding anywhere else makes the deploy time out waiting
     # for an open port.
