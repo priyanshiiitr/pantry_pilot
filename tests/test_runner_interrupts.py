@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy.orm import Session
 from strands.interrupt import Interrupt
 
-from pantrypilot.agents.runner import _handle_agent_result, resume_case
+from pantrypilot.agents.runner import _handle_agent_result, resume_case, run_case
 from pantrypilot.agents.schemas import CaseUpdate
 from pantrypilot.database import utc_now
 from pantrypilot.models import AgentLog, AgentRun, Decision, DecisionStatus, Offer, OfferStatus, Restaurant, Role, User
@@ -163,3 +163,45 @@ def test_resume_case_rejects_an_already_resumed_decision(db_session: Session) ->
 
     with pytest.raises(ValueError, match="not 'answered'"):
         resume_case(decision.id)
+
+
+def test_run_case_refuses_to_restart_an_agent_that_is_waiting_on_a_human(db_session: Session) -> None:
+    """An offer whose agent is paused mid-interrupt must not be started over.
+
+    Its saved session is parked waiting for an interruptResponse, so handing it a
+    fresh prompt makes Strands raise `must resume from interrupt with list of
+    interruptResponse's`. run_case detects the pending decision first and puts
+    the offer back into needs_human instead, which is what it actually is.
+    """
+    offer = make_offer(db_session)
+    create_decision(db_session, offer.id, "int-abc123", "ask_admin_offer_1", SAMPLE_CARD)
+    # However the offer ended up back in the queue (a manual requeue, a retry
+    # after an unrelated failure), the agent is still paused.
+    offer.status = OfferStatus.POSTED
+    db_session.commit()
+
+    # No model is reached, so no API call happens and none is needed.
+    assert run_case(offer.id) is None
+
+    db_session.refresh(offer)
+    assert offer.status == OfferStatus.NEEDS_HUMAN
+
+
+def test_run_case_still_runs_when_the_decision_has_been_answered(db_session: Session, monkeypatch) -> None:
+    """A decision that's already been answered no longer blocks a fresh run."""
+    offer = make_offer(db_session)
+    decision = create_decision(db_session, offer.id, "int-abc123", "ask_admin_offer_1", SAMPLE_CARD)
+    answer_decision(
+        db_session, decision, chosen_option="Extend the deadline", admin_note="", answered_by_user_id=1
+    )
+    offer.status = OfferStatus.POSTED
+    db_session.commit()
+
+    # Stop before any model call: getting past the guard is the whole point.
+    def explode(*args, **kwargs):
+        raise RuntimeError("reached the agent")
+
+    monkeypatch.setattr("pantrypilot.agents.runner.build_coordinator_agent", explode)
+
+    with pytest.raises(RuntimeError, match="reached the agent"):
+        run_case(offer.id)

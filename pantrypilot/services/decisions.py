@@ -43,6 +43,18 @@ def list_pending_decisions(session: Session) -> list[Decision]:
     return list(session.scalars(query))
 
 
+def has_pending_decision(session: Session, offer_id: int) -> bool:
+    """Is this offer's agent currently paused waiting for an admin to answer?
+
+    While that is true the agent's saved session (agents/sessions.py) is parked
+    mid-interrupt, and the only valid way forward is runner.resume_case() with
+    the admin's answer. Starting a fresh run instead would hand a plain string
+    to an agent Strands expects to resume with an interruptResponse.
+    """
+    query = select(Decision.id).where(Decision.offer_id == offer_id, Decision.status == DecisionStatus.PENDING)
+    return session.scalars(query).first() is not None
+
+
 def list_answered_decisions(session: Session) -> list[Decision]:
     """Return decisions an admin has answered but the agent hasn't resumed yet.
 

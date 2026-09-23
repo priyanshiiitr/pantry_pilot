@@ -17,7 +17,13 @@ from pantrypilot.agents.schemas import CaseUpdate
 from pantrypilot.agents.sessions import build_offer_session_manager
 from pantrypilot.models import DecisionStatus, Offer, RunTrigger
 from pantrypilot.services.activity_log import finish_agent_run, log_event, start_agent_run
-from pantrypilot.services.decisions import create_decision, get_decision, mark_decision_failed, mark_decision_resumed
+from pantrypilot.services.decisions import (
+    create_decision,
+    get_decision,
+    has_pending_decision,
+    mark_decision_failed,
+    mark_decision_resumed,
+)
 from pantrypilot.services.offers import (
     claim_offer_for_agent,
     flag_needs_human,
@@ -63,6 +69,13 @@ def run_case(
         offer = session.get(Offer, offer_id)
         if offer is None:
             raise ValueError(f"No offer with id {offer_id}.")
+        # A paused agent can only be continued, never restarted: its session is
+        # parked mid-interrupt and Strands will reject a fresh prompt. Put the
+        # offer back into the state that matches reality and leave it for the
+        # admin, rather than crashing here every time the worker comes round.
+        if has_pending_decision(session, offer_id):
+            flag_needs_human(session, offer, "Waiting on a coordinator's answer before the agent can continue.")
+            return None
         claim_offer_for_agent(session, offer)
 
     run_id = start_agent_run(trigger=trigger, offer_id=offer_id)
