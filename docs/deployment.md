@@ -37,9 +37,27 @@ Start with A.
 Render's free Postgres is deleted after 30 days. [Neon](https://neon.tech)'s free
 tier isn't, which matters if you want the demo alive after judging.
 
-1. Create a project. Pick the region closest to your Render region.
+1. Create a project. **Put it in the same region you will deploy Render to.**
 2. Copy the connection string. It looks like
    `postgresql://user:pass@ep-xxx.aws.neon.tech/neondb?sslmode=require`.
+
+> **Region is the single biggest performance decision here, and it cannot be
+> changed after the project is created.**
+>
+> The admin Overview issues ~23 queries, so every millisecond of round trip is
+> multiplied by 23. Measured from one laptop in India:
+>
+> | Neon region | Per query | Overview page |
+> |---|---|---|
+> | `ap-southeast-2` (Sydney) | ~407 ms | ~19.5 s |
+> | `ap-southeast-1` (Singapore) | ~83 ms | ~2.3 s |
+>
+> Deployed, the client is Render rather than a laptop, so putting both in the
+> same region takes this into single-digit milliseconds. Pick a region Render
+> and Neon share — Singapore, Oregon, Ohio and Frankfurt all work.
+>
+> Getting this wrong looks like "the app is slow", not "the database is far
+> away", and no amount of query tuning recovers it.
 
 Keep it somewhere safe — it's a password.
 
@@ -51,6 +69,7 @@ automatically (`pantrypilot/database.py:normalise_database_url`).
 
 1. Push this repo to GitHub.
 2. Render → **New → Blueprint** → pick the repo. It reads `render.yaml`.
+   **Set the region to match your Neon project** — see the table above.
 3. Fill in the variables it asks for:
 
 | Variable | Value |
