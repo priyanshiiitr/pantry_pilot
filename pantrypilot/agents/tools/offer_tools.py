@@ -21,6 +21,12 @@ from pantrypilot.models import Offer
 def get_offer(offer_id: int) -> dict:
     """Get the full details of a surplus food offer, exactly as the restaurant wrote it.
 
+    If the Intake agent has already analysed this offer, `structured_details` holds
+    its breakdown — estimated weight and meals, allergens, dietary conflicts,
+    whether it needs refrigeration, and how perishable it is. Prefer those figures
+    over re-reading the raw text: they are what the rest of the team is working
+    from, so re-estimating risks two agents planning against different numbers.
+
     Args:
         offer_id: the id of the offer to look up.
     """
@@ -39,6 +45,8 @@ def get_offer(offer_id: int) -> dict:
             "restaurant_name": offer.restaurant.name,
             "restaurant_lat": offer.restaurant.lat,
             "restaurant_lon": offer.restaurant.lon,
+            # None until the Intake agent has run — see agents/intake_agent.py.
+            "structured_details": offer.structured_details,
         }
 
 

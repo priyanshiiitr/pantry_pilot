@@ -17,6 +17,7 @@ from pantrypilot.agents.schemas import OfferDetails
 from pantrypilot.agents.tools.offer_tools import get_current_time, get_offer
 from pantrypilot.models import RunTrigger
 from pantrypilot.services.activity_log import finish_agent_run, log_event, start_agent_run
+from pantrypilot.services.offers import save_structured_details
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "intake.md"
 INTAKE_SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
@@ -64,6 +65,13 @@ def run_intake_case(
         raise
 
     details = result.structured_output
+    # Save it on the offer, not just in the log. Matching and Dispatch read it
+    # back through get_offer; without this each of them re-derives the weight and
+    # allergens from the raw text, and they disagree — watching a real run,
+    # Intake computed 38.0kg while Dispatch separately guessed "maybe 30-40kg"
+    # and filtered a driver's capacity on its own guess.
+    save_structured_details(offer_id, details.model_dump())
+
     summary = f"Estimated {details.estimated_kg}kg, {details.estimated_meals} meals."
     log_event(run_id, offer_id, "intake", "decision", summary, details=details.model_dump())
     if owns_run:

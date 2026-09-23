@@ -117,3 +117,44 @@ def test_get_driver_history_counts_accepted_and_declined(db_session: Session) ->
     assert result["accepted"] == 1
     assert result["declined"] == 1
     assert result["decline_reasons"] == ["Car trouble."]
+
+
+def test_available_drivers_include_travel_time_not_just_distance(db_session: Session) -> None:
+    """The agent plans in minutes, so the tool reports minutes.
+
+    Watching a real run, the Dispatch agent needed driver-to-pickup time, found
+    only distance_km, and derived "minutes = distance_km * 2" from a guessed
+    30km/h — close to, but not the same as, the 25km/h plus loading buffer the
+    rest of the system uses. Returning the real number keeps every leg of its
+    plan on one set of figures.
+    """
+    make_driver(db_session, "d@test.local", lat=SEATTLE_LAT + 0.05, lon=SEATTLE_LON)
+
+    results = get_available_drivers(lat=SEATTLE_LAT, lon=SEATTLE_LON, needed_by=MONDAY_NOON_UTC.isoformat())
+
+    assert results[0]["minutes_to_pickup"] > 0
+    assert isinstance(results[0]["minutes_to_pickup"], int)
+
+
+def test_travel_time_matches_the_shared_estimator(db_session: Session) -> None:
+    """The number must agree with estimate_travel_time, or the agent's legs won't add up."""
+    from pantrypilot.services.geo import estimate_travel_minutes
+
+    make_driver(db_session, "d@test.local", lat=SEATTLE_LAT + 0.05, lon=SEATTLE_LON)
+
+    driver = get_available_drivers(lat=SEATTLE_LAT, lon=SEATTLE_LON, needed_by=MONDAY_NOON_UTC.isoformat())[0]
+
+    assert driver["minutes_to_pickup"] == round(estimate_travel_minutes(driver["distance_km"]))
+
+
+def test_available_drivers_include_coordinates_for_the_onward_leg(db_session: Session) -> None:
+    """With lat/lon the agent can call estimate_travel_time for driver -> pantry itself.
+
+    Without them it could only ever approximate that second leg.
+    """
+    make_driver(db_session, "d@test.local")
+
+    driver = get_available_drivers(lat=SEATTLE_LAT, lon=SEATTLE_LON, needed_by=MONDAY_NOON_UTC.isoformat())[0]
+
+    assert driver["lat"] == SEATTLE_LAT
+    assert driver["lon"] == SEATTLE_LON

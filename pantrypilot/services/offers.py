@@ -15,6 +15,7 @@ to the database. Which pantry or driver to pick is decided in agents/, never her
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from pantrypilot import database
 from pantrypilot.database import utc_now
 from pantrypilot.models import Offer, OfferStatus, Restaurant
 from pantrypilot.web.schemas import OfferCreate
@@ -67,6 +68,23 @@ def claim_offer_for_agent(session: Session, offer: Offer) -> None:
     offer.status = OfferStatus.AGENT_WORKING
     offer.claimed_at = utc_now()
     session.commit()
+
+
+def save_structured_details(offer_id: int, details: dict) -> None:
+    """Store the Intake agent's clean breakdown on the offer.
+
+    Opens its own session because it is called from inside an agent run (see
+    agents/intake_agent.py), which has no request-scoped session of its own.
+
+    This is what lets the later specialists work from one set of numbers: without
+    it, Matching and Dispatch each re-read the raw text and reach their own
+    slightly different estimates of the same food.
+    """
+    with database.SessionLocal() as session:
+        offer = session.get(Offer, offer_id)
+        if offer is not None:
+            offer.structured_details = details
+            session.commit()
 
 
 def set_agent_summary(session: Session, offer: Offer, summary: str) -> None:
