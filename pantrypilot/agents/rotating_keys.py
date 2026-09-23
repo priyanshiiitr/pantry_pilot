@@ -63,6 +63,41 @@ class RotatingKeyTransport(httpx.AsyncHTTPTransport):
         return response
 
 
+class SharedAsyncClient(httpx.AsyncClient):
+    """An AsyncClient that ignores being closed by code that doesn't own it.
+
+    The OpenAI SDK closes whatever `http_client` it was handed once it is done
+    with it — reasonable when the SDK created that client, but here one client is
+    shared by every agent in the process. Letting the first specialist to finish
+    close it left the Coordinator with `RuntimeError: Cannot send a request, as
+    the client has been closed.` part-way through a run, surfacing as an opaque
+    "Connection error" on the next tool call.
+
+    The process owns this client for its whole life, so there is nothing to
+    release early; the OS reclaims the sockets at exit.
+    """
+
+    async def aclose(self) -> None:
+        """Deliberately do nothing — see the class docstring."""
+
+    async def __aexit__(self, *_exc_info: object) -> None:
+        """Also a no-op, so `async with client:` can't close it either."""
+
+
+_shared_client: SharedAsyncClient | None = None
+
+
 def build_rotating_http_client(api_keys: list[str]) -> httpx.AsyncClient:
-    """Build the AsyncClient to hand to the OpenAI SDK via `client_args["http_client"]`."""
-    return httpx.AsyncClient(transport=RotatingKeyTransport(api_keys), timeout=httpx.Timeout(120.0))
+    """Return the process-wide client that rotates `api_keys` on a 429.
+
+    Shared rather than per-model so that connection pooling and — more
+    importantly — the "which key worked last" position are common to every
+    agent. A per-model client would make each new specialist re-discover the
+    exhausted key from scratch.
+    """
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = SharedAsyncClient(
+            transport=RotatingKeyTransport(api_keys), timeout=httpx.Timeout(120.0)
+        )
+    return _shared_client

@@ -14,7 +14,7 @@ import asyncio
 import httpx
 import pytest
 
-from pantrypilot.agents.rotating_keys import RotatingKeyTransport
+from pantrypilot.agents.rotating_keys import RotatingKeyTransport, SharedAsyncClient
 from pantrypilot.config import Settings
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -150,3 +150,46 @@ def test_blank_fallbacks_are_ignored() -> None:
     settings = Settings(groq_api_key="key-a", groq_fallback_api_keys=" , ,")
 
     assert settings.groq_api_keys == ["key-a"]
+
+
+def test_the_shared_client_survives_being_closed_by_the_sdk() -> None:
+    """The OpenAI SDK closes whatever http_client it is handed when it's done.
+
+    That client is shared by every agent in the process, so honouring the close
+    left later agents with "Cannot send a request, as the client has been
+    closed" mid-run — which surfaced only as an opaque "Connection error".
+    """
+    client = SharedAsyncClient(transport=RotatingKeyTransport(["key-a"]))
+
+    asyncio.run(client.aclose())
+
+    assert not client.is_closed
+
+
+def test_the_shared_client_survives_an_async_with_block() -> None:
+    """`async with client:` must not close it either."""
+
+    async def use_and_exit() -> None:
+        async with client:
+            pass
+
+    client = SharedAsyncClient(transport=RotatingKeyTransport(["key-a"]))
+    asyncio.run(use_and_exit())
+
+    assert not client.is_closed
+
+
+def test_every_agent_shares_one_client_and_its_rotation_position(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each agent builds its own model; they must not each re-discover a dead key.
+
+    A per-model client would make every new specialist start again at key 1 and
+    burn a 429 finding out what the process already knew.
+    """
+    import pantrypilot.agents.rotating_keys as module
+
+    monkeypatch.setattr(module, "_shared_client", None)
+
+    first = module.build_rotating_http_client(["key-a", "key-b"])
+    second = module.build_rotating_http_client(["key-a", "key-b"])
+
+    assert first is second
