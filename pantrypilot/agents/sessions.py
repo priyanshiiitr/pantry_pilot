@@ -14,11 +14,35 @@ session manager could replace this for a real AWS deployment — same interface,
 see docs/aws-deployment.md.)
 """
 
+import shutil
+
 from strands.session import FileSessionManager
 
 from pantrypilot.config import PROJECT_ROOT
 
 SESSIONS_DIR = PROJECT_ROOT / "data" / "sessions"
+
+
+def clear_agent_sessions() -> int:
+    """Delete every saved agent conversation. Returns how many were removed.
+
+    Call this whenever the offers table is wiped (see scripts/seed_demo.py).
+    Sessions are keyed by offer id, and a reset restarts those ids — so a
+    surviving file would hand the next offer #15 the previous offer #15's
+    conversation, and the agent would confidently "remember" work it never did
+    on food that no longer exists.
+    """
+    if not SESSIONS_DIR.exists():
+        return 0
+
+    removed = 0
+    for session_path in SESSIONS_DIR.iterdir():
+        if session_path.is_dir():
+            shutil.rmtree(session_path)
+        else:
+            session_path.unlink()
+        removed += 1
+    return removed
 
 
 def build_offer_session_manager(offer_id: int) -> FileSessionManager:

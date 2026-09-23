@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from pantrypilot.agents.sessions import clear_agent_sessions
 from pantrypilot.auth.passwords import hash_password
 from pantrypilot.config import settings
 from pantrypilot.database import SessionLocal, create_tables, drop_tables, utc_now
@@ -230,6 +231,7 @@ def main() -> None:
 
     if args.reset:
         drop_tables()
+        clear_agent_sessions()
     create_tables()
 
     with SessionLocal() as session:
