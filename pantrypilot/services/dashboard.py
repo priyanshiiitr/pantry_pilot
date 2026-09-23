@@ -17,9 +17,11 @@ from pantrypilot.models import (
     Delivery,
     DeliveryStatus,
     DispatchRequest,
+    DispatchStatus,
     Driver,
     Offer,
     OfferStatus,
+    PantryResponse,
     Role,
     User,
 )
@@ -302,6 +304,62 @@ def get_recent_network_activity(session: Session, limit: int = 8) -> list[dict[s
 
     events.sort(key=lambda event: event["at"], reverse=True)
     return events[:limit]
+
+
+def list_switchable_accounts(session: Session) -> list[dict[str, Any]]:
+    """Every account an admin can preview, with how much work is waiting on each.
+
+    The waiting count is the point: after the agents dispatch a delivery, exactly
+    one driver and one pantry can act on it, and without this the admin has to
+    guess which of eight drivers that is. Ordered by waiting work first, so
+    whoever the agents are actually blocked on is at the top of the list.
+    """
+    pending_by_driver = dict(
+        session.execute(
+            select(DispatchRequest.driver_id, func.count())
+            .where(DispatchRequest.status == DispatchStatus.REQUESTED)
+            .group_by(DispatchRequest.driver_id)
+        ).all()
+    )
+    pending_by_pantry = dict(
+        session.execute(
+            select(Delivery.pantry_id, func.count())
+            .where(Delivery.pantry_response == PantryResponse.PENDING)
+            .group_by(Delivery.pantry_id)
+        ).all()
+    )
+    active_by_restaurant = dict(
+        session.execute(
+            select(Offer.restaurant_id, func.count())
+            .where(Offer.status.in_(ACTIVE_OFFER_STATUSES))
+            .group_by(Offer.restaurant_id)
+        ).all()
+    )
+
+    accounts: list[dict[str, Any]] = []
+    for user in session.scalars(select(User).where(User.is_active.is_(True)).order_by(User.id)):
+        if user.role == Role.DRIVER and user.driver is not None:
+            waiting, label = pending_by_driver.get(user.driver.id, 0), "pickup requests"
+        elif user.role == Role.PANTRY and user.pantry is not None:
+            waiting, label = pending_by_pantry.get(user.pantry.id, 0), "deliveries to confirm"
+        elif user.role == Role.RESTAURANT and user.restaurant is not None:
+            waiting, label = active_by_restaurant.get(user.restaurant.id, 0), "offers in progress"
+        else:
+            continue
+
+        accounts.append(
+            {
+                "user_id": user.id,
+                "email": user.email,
+                "display_name": user.display_name,
+                "role": user.role,
+                "waiting_count": waiting,
+                "waiting_label": label,
+            }
+        )
+
+    accounts.sort(key=lambda account: (-account["waiting_count"], account["display_name"]))
+    return accounts
 
 
 def list_all_users(session: Session) -> list[User]:

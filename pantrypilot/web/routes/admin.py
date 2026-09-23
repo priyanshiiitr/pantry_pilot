@@ -6,10 +6,10 @@ the worker resumes the agent on its own schedule (see worker/jobs.py), so this
 endpoint stays fast even though resuming can take a while.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from pantrypilot.auth.current_user import require_role
+from pantrypilot.auth.current_user import get_real_user, require_role
 from pantrypilot.database import get_db
 from pantrypilot.models import DecisionStatus, Role, User
 from pantrypilot.services.activity_log import list_recent_log_entries
@@ -22,6 +22,7 @@ from pantrypilot.services.dashboard import (
     get_user_or_raise,
     get_user_status_label,
     list_all_users,
+    list_switchable_accounts,
 )
 from pantrypilot.services.decisions import answer_decision, get_decision, list_pending_decisions
 from pantrypilot.services.memory import deactivate_fact, get_subject_name, list_active_facts
@@ -42,6 +43,7 @@ from pantrypilot.web.schemas import (
     OverviewStatsOut,
     PantryProfileOut,
     RestaurantProfileOut,
+    SwitchableAccountOut,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -129,6 +131,21 @@ def get_overview_route(_user: User = Depends(require_role(Role.ADMIN)), db: Sess
         recent_activity=[NetworkEventOut(**event) for event in get_recent_network_activity(db)],
         pending_decisions=[DecisionOut.from_decision(decision) for decision in list_pending_decisions(db)],
     )
+
+
+@router.get("/switchable-accounts", response_model=list[SwitchableAccountOut])
+def list_switchable_accounts_route(request: Request, db: Session = Depends(get_db)) -> list[SwitchableAccountOut]:
+    """Accounts the admin can preview, with whoever the agents are waiting on first.
+
+    Checks the real logged-in account rather than the previewed one (the same
+    reason web/routes/auth.py:view_as does): an admin already previewing a driver
+    must still see the list, otherwise switching from one driver to another means
+    going back to the admin view in between.
+    """
+    real_user = get_real_user(request, db)
+    if real_user is None or real_user.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Only an admin can switch views.")
+    return [SwitchableAccountOut(**account) for account in list_switchable_accounts(db)]
 
 
 @router.get("/users", response_model=list[AdminUserOut])

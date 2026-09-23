@@ -46,9 +46,26 @@ class MeResponse(BaseModel):
 
 
 class ViewAsRequest(BaseModel):
-    """Body of POST /api/auth/view-as. A null/admin role returns to the admin's own view."""
+    """Body of POST /api/auth/view-as. A null/admin role returns to the admin's own view.
+
+    `user_id` picks one specific account. Without it, `role` lands on a
+    representative account for that role — which is rarely the one holding the
+    request the agents just sent, since that could be any of eight drivers.
+    """
 
     role: str | None = None
+    user_id: int | None = None
+
+
+class SwitchableAccountOut(BaseModel):
+    """One account an admin can preview, and how much work is waiting on it."""
+
+    user_id: int
+    email: str
+    display_name: str
+    role: str
+    waiting_count: int
+    waiting_label: str
 
 
 class SignupRequest(BaseModel):

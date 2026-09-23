@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import { apiGet } from "../api.js";
@@ -72,6 +73,14 @@ export default function AppShell({ title, children }) {
   );
   const pendingDecisions = decisions?.length ?? 0;
 
+  // Which role's account list is expanded in "Switch view", if any.
+  const [openRole, setOpenRole] = useState(null);
+  const { data: accounts } = usePolling(
+    () => (realUser?.role === "admin" ? apiGet("/api/admin/switchable-accounts") : Promise.resolve([])),
+    8000,
+    [realUser?.role]
+  );
+
   if (!user) return null;
 
   const navLinks = NAV_BY_ROLE[user.role] ?? [];
@@ -83,7 +92,15 @@ export default function AppShell({ title, children }) {
   }
 
   async function handleSwitch(role) {
-    const nextUser = await viewAs(role);
+    const nextUser = await viewAs({ role });
+    setOpenRole(null);
+    navigate(roleHomePath(nextUser.role));
+  }
+
+  /** Preview one specific account — the driver the agents actually asked, not just any driver. */
+  async function handleSwitchToAccount(userId) {
+    const nextUser = await viewAs({ user_id: userId });
+    setOpenRole(null);
     navigate(roleHomePath(nextUser.role));
   }
 
@@ -117,24 +134,65 @@ export default function AppShell({ title, children }) {
           ))}
         </nav>
 
-        {/* Only a real admin may preview other roles — the button is hidden for
+        {/* Only a real admin may preview other roles — the buttons are hidden for
             everyone else, and the backend enforces the same rule regardless. */}
         {realUser?.role === "admin" && (
           <div className="sidebar-switch">
             <div className="sidebar-heading">Switch view</div>
-            {SWITCHABLE_ROLES.map((option) => (
-              <button
-                key={option.role}
-                type="button"
-                onClick={() => handleSwitch(option.role)}
-                className={user.role === option.role ? "sidebar-link is-active" : "sidebar-link"}
-              >
-                <span className="sidebar-link-icon" aria-hidden="true">
-                  {option.icon}
-                </span>
-                {option.label}
-              </button>
-            ))}
+            {SWITCHABLE_ROLES.map((option) => {
+              const isAdminOption = option.role === "admin";
+              const isOpen = openRole === option.role;
+              const accountsForRole = (accounts ?? []).filter((account) => account.role === option.role);
+              const waitingHere = accountsForRole.reduce((total, a) => total + a.waiting_count, 0);
+
+              return (
+                <div key={option.role}>
+                  <button
+                    type="button"
+                    // Admin means "back to my own view", so it switches directly.
+                    // The others open the list, because which pantry or driver
+                    // matters — the agents' request went to exactly one of them.
+                    onClick={() => (isAdminOption ? handleSwitch("admin") : setOpenRole(isOpen ? null : option.role))}
+                    className={user.role === option.role ? "sidebar-link is-active" : "sidebar-link"}
+                  >
+                    <span className="sidebar-link-icon" aria-hidden="true">
+                      {option.icon}
+                    </span>
+                    {option.label}
+                    {!isAdminOption && waitingHere > 0 && <span className="sidebar-link-count">{waitingHere}</span>}
+                    {!isAdminOption && (
+                      <span className="sidebar-link-caret" aria-hidden="true">
+                        {isOpen ? "▾" : "▸"}
+                      </span>
+                    )}
+                  </button>
+
+                  {isOpen && (
+                    <div className="sidebar-accounts">
+                      {accountsForRole.length === 0 && <div className="sidebar-account-empty">No accounts yet.</div>}
+                      {accountsForRole.map((account) => (
+                        <button
+                          key={account.user_id}
+                          type="button"
+                          onClick={() => handleSwitchToAccount(account.user_id)}
+                          className={
+                            user.id === account.user_id ? "sidebar-account-row is-active" : "sidebar-account-row"
+                          }
+                          title={account.email}
+                        >
+                          <span className="sidebar-account-row-name">{account.display_name}</span>
+                          {account.waiting_count > 0 && (
+                            <span className="sidebar-account-row-badge" title={account.waiting_label}>
+                              {account.waiting_count}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

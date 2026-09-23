@@ -133,3 +133,80 @@ def test_previewing_a_role_with_no_accounts_is_a_clear_error(client: TestClient)
     response = client.post("/api/auth/view-as", json={"role": "pantry"})
 
     assert response.status_code == 404
+
+
+def test_admin_can_preview_one_specific_account(client: TestClient) -> None:
+    """Which driver matters: the agents' request went to exactly one of them.
+
+    Previewing by role alone lands on a representative account, which is rarely
+    the one holding the work — so the admin could not reach the driver who had
+    been asked.
+    """
+    make_admin(client)
+    make_user(client, "first@test.local", Role.DRIVER)
+    make_user(client, "second@test.local", Role.DRIVER)
+    login(client, "admin@test.local")
+
+    with client.session_factory() as session:
+        wanted = session.query(User).filter(User.email == "second@test.local").one().id
+
+    response = client.post("/api/auth/view-as", json={"user_id": wanted})
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "second@test.local"
+
+
+def test_switching_between_two_accounts_does_not_need_a_trip_via_admin(client: TestClient) -> None:
+    """An admin already previewing one driver can hop straight to another."""
+    make_admin(client)
+    make_user(client, "first@test.local", Role.DRIVER)
+    make_user(client, "second@test.local", Role.DRIVER)
+    login(client, "admin@test.local")
+
+    with client.session_factory() as session:
+        ids = {u.email: u.id for u in session.query(User).all()}
+
+    client.post("/api/auth/view-as", json={"user_id": ids["first@test.local"]})
+    response = client.post("/api/auth/view-as", json={"user_id": ids["second@test.local"]})
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "second@test.local"
+
+
+def test_the_account_list_is_readable_while_already_previewing(client: TestClient) -> None:
+    """Otherwise the sidebar's switcher would vanish the moment it was used."""
+    make_admin(client)
+    make_user(client, "d@test.local", Role.DRIVER)
+    login(client, "admin@test.local")
+    client.post("/api/auth/view-as", json={"role": "driver"})
+
+    assert client.get("/api/admin/switchable-accounts").status_code == 200
+    # ...while the rest of the admin API stays closed.
+    assert client.get("/api/admin/overview").status_code == 403
+
+
+def test_a_non_admin_cannot_read_the_account_list(client: TestClient) -> None:
+    """It names every account in the system, so it stays admin-only."""
+    make_user(client, "d@test.local", Role.DRIVER)
+    login(client, "d@test.local")
+
+    assert client.get("/api/admin/switchable-accounts").status_code == 403
+
+
+def test_previewing_a_non_existent_account_is_a_clear_error(client: TestClient) -> None:
+    make_admin(client)
+    login(client, "admin@test.local")
+
+    assert client.post("/api/auth/view-as", json={"user_id": 999999}).status_code == 404
+
+
+def test_an_admin_cannot_preview_another_admin(client: TestClient) -> None:
+    """Nothing is gained, and it muddies who actually answered a decision."""
+    make_admin(client)
+    make_admin(client, "other@test.local")
+    login(client, "admin@test.local")
+
+    with client.session_factory() as session:
+        other = session.query(User).filter(User.email == "other@test.local").one().id
+
+    assert client.post("/api/auth/view-as", json={"user_id": other}).status_code == 400

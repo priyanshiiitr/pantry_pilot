@@ -52,9 +52,11 @@ export function AuthProvider({ children }) {
     setRealUser(null);
   }, []);
 
-  /** Admin only: preview another role's dashboard, or pass "admin" to return to your own. */
-  const viewAs = useCallback(async (role) => {
-    const data = await apiPost("/api/auth/view-as", { role });
+  /** Admin only: preview another account's dashboard.
+   *  Pass { role } for a representative account of that role, { user_id } for a
+   *  specific one, or { role: "admin" } to return to your own view. */
+  const viewAs = useCallback(async (target) => {
+    const data = await apiPost("/api/auth/view-as", target);
     setUser(data.user);
     setRealUser(data.real_user);
     return data.user;

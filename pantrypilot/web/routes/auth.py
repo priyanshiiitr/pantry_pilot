@@ -89,13 +89,21 @@ def view_as(payload: ViewAsRequest, request: Request, db: Session = Depends(get_
     if real_user is None or real_user.role != Role.ADMIN:
         raise HTTPException(status_code=403, detail="Only an admin can switch views.")
 
-    if payload.role is None or payload.role == Role.ADMIN:
+    if payload.user_id is not None:
+        previewed = db.get(User, payload.user_id)
+        if previewed is None or not previewed.is_active:
+            raise HTTPException(status_code=404, detail="That account doesn't exist.")
+        if previewed.role == Role.ADMIN:
+            # Previewing another admin would grant this admin's session a
+            # different admin's identity for audit purposes, with nothing gained.
+            raise HTTPException(status_code=400, detail="Use 'Back to admin' to return to your own view.")
+    elif payload.role is None or payload.role == Role.ADMIN:
         request.session.pop(SESSION_VIEW_AS_KEY, None)
         return MeResponse(user=UserOut.from_user(real_user), real_user=UserOut.from_user(real_user))
-
-    previewed = pick_account_to_preview(db, Role(payload.role))
-    if previewed is None:
-        raise HTTPException(status_code=404, detail=f"There are no {payload.role} accounts to preview yet.")
+    else:
+        previewed = pick_account_to_preview(db, Role(payload.role))
+        if previewed is None:
+            raise HTTPException(status_code=404, detail=f"There are no {payload.role} accounts to preview yet.")
 
     request.session[SESSION_VIEW_AS_KEY] = previewed.id
     return MeResponse(user=UserOut.from_user(previewed), real_user=UserOut.from_user(real_user))
