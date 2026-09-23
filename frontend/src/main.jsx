@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App.jsx";
 import "./styles.css";
+import "./dashboard.css";
 
 createRoot(document.getElementById("root")).render(
   // StrictMode runs extra checks during development to warn about common mistakes.

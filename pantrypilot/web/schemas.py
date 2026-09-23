@@ -34,9 +34,21 @@ class UserOut(BaseModel):
 
 
 class MeResponse(BaseModel):
-    """Response for GET /api/auth/me. `user` is None when nobody is logged in."""
+    """Response for GET /api/auth/me. `user` is None when nobody is logged in.
+
+    `real_user` is the account that actually logged in. It differs from `user`
+    only while an admin is previewing another role's dashboard, which is how the
+    sidebar knows to show the "viewing as" banner and a way back.
+    """
 
     user: UserOut | None
+    real_user: UserOut | None = None
+
+
+class ViewAsRequest(BaseModel):
+    """Body of POST /api/auth/view-as. A null/admin role returns to the admin's own view."""
+
+    role: str | None = None
 
 
 class SignupRequest(BaseModel):
@@ -513,6 +525,54 @@ class DashboardStatsOut(BaseModel):
     meals_saved_today: int
     kg_saved_total: float
     meals_saved_total: int
+
+
+class OverviewStatsOut(BaseModel):
+    """The four headline cards on the admin Overview page.
+
+    The `_change` fields are percent change vs. yesterday, and are None when
+    yesterday had nothing to compare against — the card then shows no trend
+    rather than an invented one. `match_rate` is None until something has
+    actually finished.
+    """
+
+    active_offers: int
+    active_offers_change: float | None
+    meals_rescued: int
+    meals_rescued_change: float | None
+    match_rate: float | None
+    pending_decisions: int
+    pending_decisions_change: float | None
+
+
+class NetworkActivityOut(BaseModel):
+    """The five counts along the "Live network activity" strip, in pipeline order."""
+
+    restaurants_posting: int
+    offers_being_evaluated: int
+    pantries_receiving_today: int
+    drivers_en_route: int
+    drivers_on_duty: int
+
+
+class NetworkEventOut(BaseModel):
+    """One line in the Overview page's recent-activity feed."""
+
+    kind: str
+    title: str
+    detail: str
+    status: str
+    offer_id: int
+    at: datetime
+
+
+class OverviewOut(BaseModel):
+    """Everything the admin Overview page needs, fetched in one call."""
+
+    stats: OverviewStatsOut
+    network: NetworkActivityOut
+    recent_activity: list[NetworkEventOut]
+    pending_decisions: list[DecisionOut]
 
 
 class AdminUserOut(BaseModel):

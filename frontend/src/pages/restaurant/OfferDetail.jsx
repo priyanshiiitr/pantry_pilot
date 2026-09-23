@@ -1,9 +1,17 @@
 import { Link, useParams } from "react-router-dom";
 
 import { apiGet } from "../../api.js";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
+
+// Shown until the agent team has written its own summary of what it did.
+const WAITING_MESSAGES = {
+  posted: "Waiting for the agent team to pick this up — usually within 15 seconds.",
+  agent_working: "The agent team is working on this right now: reading the offer, then finding a pantry and a driver.",
+  needs_human: "The agent team paused to ask a coordinator a question about this offer.",
+};
+const DEFAULT_WAITING_MESSAGE = "No update from the agent team yet.";
 
 /** OfferDetail — one offer's full details and live status, for the restaurant that posted it. */
 export default function OfferDetail() {
@@ -11,7 +19,7 @@ export default function OfferDetail() {
   const { data: offer, error } = usePolling(() => apiGet(`/api/restaurant/offers/${offerId}`), 3000, [offerId]);
 
   return (
-    <Layout title="Offer details">
+    <AppShell title="Offer details">
       <p>
         <Link to="/restaurant">← Back to dashboard</Link>
       </p>
@@ -38,13 +46,10 @@ export default function OfferDetail() {
           </dl>
           <div className="agent-summary">
             <h3>Agent update</h3>
-            <p className="muted">
-              {offer.agent_summary ??
-                "No update yet — the AI agents haven't looked at this offer. That arrives in Step 6+."}
-            </p>
+            <p className="muted">{offer.agent_summary ?? WAITING_MESSAGES[offer.status] ?? DEFAULT_WAITING_MESSAGE}</p>
           </div>
         </section>
       )}
-    </Layout>
+    </AppShell>
   );
 }

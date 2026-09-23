@@ -18,7 +18,12 @@ from pantrypilot.agents.sessions import build_offer_session_manager
 from pantrypilot.models import DecisionStatus, Offer, RunTrigger
 from pantrypilot.services.activity_log import finish_agent_run, log_event, start_agent_run
 from pantrypilot.services.decisions import create_decision, get_decision, mark_decision_failed, mark_decision_resumed
-from pantrypilot.services.offers import claim_offer_for_agent, flag_needs_human, set_agent_summary
+from pantrypilot.services.offers import (
+    claim_offer_for_agent,
+    flag_needs_human,
+    requeue_offer_for_retry,
+    set_agent_summary,
+)
 
 DEFAULT_TASK_TEMPLATE = (
     "Handle surplus food offer #{offer_id} end to end: understand it, find it a "
@@ -70,7 +75,14 @@ def run_case(
     try:
         result = agent(task, structured_output_model=CaseUpdate)
     except Exception as error:
+        # Put the offer back in the queue rather than leaving it stuck on
+        # "agent working" forever. Most failures here are transient (the model
+        # provider rate-limiting us, a dropped connection), so the worker's next
+        # pass should simply try again.
         finish_agent_run(run_id, stop_reason="error", error=str(error))
+        with database.SessionLocal() as session:
+            offer = session.get(Offer, offer_id)
+            requeue_offer_for_retry(session, offer, f"The last attempt could not finish ({error}). Trying again.")
         raise
 
     return _handle_agent_result(result, run_id, offer_id)

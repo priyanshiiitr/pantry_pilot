@@ -70,3 +70,15 @@ def authenticate(session: Session, email: str, password: str) -> User | None:
     if not verify_password(password, user.password_hash):
         return None
     return user
+
+
+def pick_account_to_preview(session: Session, role: Role) -> User | None:
+    """Pick which account an admin sees when they switch to previewing `role`.
+
+    Always the same account for a given role (lowest id, so the seeded demo
+    accounts win over later signups), so switching away and back lands somewhere
+    predictable during a demo.
+    """
+    return session.scalars(
+        select(User).where(User.role == role, User.is_active.is_(True)).order_by(User.id).limit(1)
+    ).first()

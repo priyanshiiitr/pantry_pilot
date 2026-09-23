@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../../api.js";
 import { useAuth } from "../../auth/AuthContext.jsx";
 import DeclineButton from "../../components/DeclineButton.jsx";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
 /** PantryHome — incoming deliveries the agent has assigned, with Accept/Decline. */
@@ -20,7 +20,7 @@ export default function PantryHome() {
   }
 
   return (
-    <Layout title="Pantry dashboard">
+    <AppShell title="Pantry dashboard">
       <p className="muted">Welcome, {user.display_name}.</p>
       <p>
         <Link to="/pantry/profile">Edit your profile →</Link>
@@ -56,6 +56,6 @@ export default function PantryHome() {
           ))}
         </ul>
       )}
-    </Layout>
+    </AppShell>
   );
 }

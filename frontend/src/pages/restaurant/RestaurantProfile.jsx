@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import { useProfileForm } from "../../hooks/useProfileForm.js";
 
 /** RestaurantProfile — edit name, address and location. */
@@ -8,7 +8,7 @@ export default function RestaurantProfile() {
   const { form, updateField, save, error, saving, savedMessage } = useProfileForm("/api/restaurant/profile");
 
   return (
-    <Layout title="Restaurant profile">
+    <AppShell title="Restaurant profile">
       <p>
         <Link to="/restaurant">← Back to dashboard</Link>
       </p>
@@ -57,6 +57,6 @@ export default function RestaurantProfile() {
           </button>
         </form>
       )}
-    </Layout>
+    </AppShell>
   );
 }

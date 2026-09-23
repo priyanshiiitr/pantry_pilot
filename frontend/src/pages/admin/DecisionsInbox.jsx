@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { apiGet, apiPost } from "../../api.js";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
 // Keep in sync with the urgency values the ask_admin tool can send
@@ -121,7 +121,7 @@ export default function DecisionsInbox() {
   const visibleDecisions = (decisions ?? []).filter((decision) => !justAnswered.has(decision.id));
 
   return (
-    <Layout title="Decisions inbox">
+    <AppShell title="Decisions inbox">
       <p>
         <Link to="/admin">← Back to dashboard</Link>
       </p>
@@ -142,6 +142,6 @@ export default function DecisionsInbox() {
           ))}
         </ul>
       )}
-    </Layout>
+    </AppShell>
   );
 }

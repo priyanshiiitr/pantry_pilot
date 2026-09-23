@@ -15,7 +15,10 @@ from pantrypilot.models import DecisionStatus, Role, User
 from pantrypilot.services.activity_log import list_recent_log_entries
 from pantrypilot.services.dashboard import (
     get_dashboard_stats,
+    get_network_activity,
+    get_overview_stats,
     get_recent_activity_for_user,
+    get_recent_network_activity,
     get_user_or_raise,
     get_user_status_label,
     list_all_users,
@@ -32,7 +35,11 @@ from pantrypilot.web.schemas import (
     DashboardStatsOut,
     DecisionOut,
     DriverProfileOut,
+    NetworkActivityOut,
+    NetworkEventOut,
     OfferAdminOut,
+    OverviewOut,
+    OverviewStatsOut,
     PantryProfileOut,
     RestaurantProfileOut,
 )
@@ -106,6 +113,22 @@ def get_stats_route(
 ) -> DashboardStatsOut:
     """The stat cards on the admin home page."""
     return DashboardStatsOut(**get_dashboard_stats(db))
+
+
+@router.get("/overview", response_model=OverviewOut)
+def get_overview_route(_user: User = Depends(require_role(Role.ADMIN)), db: Session = Depends(get_db)) -> OverviewOut:
+    """Everything the admin Overview page shows, in one call.
+
+    Bundled rather than split into four endpoints because the page polls: four
+    separate requests could return numbers from four different moments and make
+    the screen contradict itself mid-refresh.
+    """
+    return OverviewOut(
+        stats=OverviewStatsOut(**get_overview_stats(db)),
+        network=NetworkActivityOut(**get_network_activity(db)),
+        recent_activity=[NetworkEventOut(**event) for event in get_recent_network_activity(db)],
+        pending_decisions=[DecisionOut.from_decision(decision) for decision in list_pending_decisions(db)],
+    )
 
 
 @router.get("/users", response_model=list[AdminUserOut])

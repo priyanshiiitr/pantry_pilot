@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { apiGet } from "../../api.js";
 import { useAuth } from "../../auth/AuthContext.jsx";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
@@ -12,7 +12,7 @@ export default function RestaurantHome() {
   const { data: offers, error } = usePolling(() => apiGet("/api/restaurant/offers"), 3000, []);
 
   return (
-    <Layout title="Restaurant dashboard">
+    <AppShell title="Restaurant dashboard">
       <div className="actions">
         <Link className="button" to="/restaurant/offers/new">
           Post surplus food
@@ -43,6 +43,6 @@ export default function RestaurantHome() {
           ))}
         </ul>
       )}
-    </Layout>
+    </AppShell>
   );
 }

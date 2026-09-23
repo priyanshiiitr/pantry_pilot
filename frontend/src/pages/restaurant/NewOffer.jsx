@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { apiPost } from "../../api.js";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 
 /** NewOffer — form for a restaurant to post surplus food. */
 export default function NewOffer() {
@@ -41,7 +41,7 @@ export default function NewOffer() {
   }
 
   return (
-    <Layout title="Post surplus food">
+    <AppShell title="Post surplus food">
       <p>
         <Link to="/restaurant">← Back to dashboard</Link>
       </p>
@@ -97,6 +97,6 @@ export default function NewOffer() {
           {submitting ? "Posting…" : "Post offer"}
         </button>
       </form>
-    </Layout>
+    </AppShell>
   );
 }

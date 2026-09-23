@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { apiGet } from "../../api.js";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
 // The React app's api.js has no apiDelete helper (nothing else needed one yet) —
@@ -36,7 +36,7 @@ export default function AgentMemory() {
   const visibleFacts = (facts ?? []).filter((fact) => !removedIds.has(fact.id));
 
   return (
-    <Layout title="What the agent remembers">
+    <AppShell title="What the agent remembers">
       <p>
         <Link to="/admin">← Back to dashboard</Link>
       </p>
@@ -81,6 +81,6 @@ export default function AgentMemory() {
           </tbody>
         </table>
       )}
-    </Layout>
+    </AppShell>
   );
 }

@@ -7,6 +7,7 @@ import AdminHome from "./pages/admin/AdminHome.jsx";
 import AgentMemory from "./pages/admin/AgentMemory.jsx";
 import AllUsers from "./pages/admin/AllUsers.jsx";
 import DecisionsInbox from "./pages/admin/DecisionsInbox.jsx";
+import Overview from "./pages/admin/Overview.jsx";
 import UserDetail from "./pages/admin/UserDetail.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Signup from "./pages/auth/Signup.jsx";
@@ -100,6 +101,14 @@ export default function App() {
           />
           <Route
             path="/admin"
+            element={
+              <RequireRole roles={["admin"]}>
+                <Overview />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/offers"
             element={
               <RequireRole roles={["admin"]}>
                 <AdminHome />

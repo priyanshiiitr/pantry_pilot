@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { apiGet } from "../../api.js";
 import { useAuth } from "../../auth/AuthContext.jsx";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import StatCard from "../../components/StatCard.jsx";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
@@ -16,7 +16,7 @@ export default function AdminHome() {
   const pendingCount = decisions?.length ?? 0;
 
   return (
-    <Layout title="Admin dashboard">
+    <AppShell title="Admin dashboard">
       <p className="muted">Welcome, {user.display_name}.</p>
 
       {stats && (
@@ -82,6 +82,6 @@ export default function AdminHome() {
           </tbody>
         </table>
       )}
-    </Layout>
+    </AppShell>
   );
 }

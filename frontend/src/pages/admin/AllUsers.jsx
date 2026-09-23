@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { apiGet } from "../../api.js";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
 const ROLE_LABELS = { restaurant: "Restaurant", pantry: "Pantry", driver: "Driver", admin: "Admin" };
@@ -11,7 +11,7 @@ export default function AllUsers() {
   const { data: users, error } = usePolling(() => apiGet("/api/admin/users"), 5000, []);
 
   return (
-    <Layout title="All users">
+    <AppShell title="All users">
       <p>
         <Link to="/admin">← Back to dashboard</Link>
       </p>
@@ -45,6 +45,6 @@ export default function AllUsers() {
           </tbody>
         </table>
       )}
-    </Layout>
+    </AppShell>
   );
 }

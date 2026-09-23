@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { apiGet } from "../../api.js";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
 // Colour-code by what kind of thing happened, so the timeline is scannable at a glance.
@@ -20,7 +20,7 @@ export default function ActivityLog() {
   const { data: entries, error } = usePolling(() => apiGet("/api/admin/activity"), 3000, []);
 
   return (
-    <Layout title="Agent activity">
+    <AppShell title="Agent activity">
       <p>
         <Link to="/admin">← Back to dashboard</Link>
       </p>
@@ -49,6 +49,6 @@ export default function ActivityLog() {
           ))}
         </ul>
       )}
-    </Layout>
+    </AppShell>
   );
 }

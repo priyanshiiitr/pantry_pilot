@@ -4,7 +4,7 @@ and one user's detail view.
 DETERMINISTIC CODE: pure aggregation queries. No AI involved.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -17,6 +17,7 @@ from pantrypilot.models import (
     Delivery,
     DeliveryStatus,
     DispatchRequest,
+    Driver,
     Offer,
     OfferStatus,
     Role,
@@ -78,6 +79,229 @@ def get_dashboard_stats(session: Session) -> dict[str, Any]:
         "kg_saved_total": round(float(kg_total), 1),
         "meals_saved_total": int(meals_total),
     }
+
+
+#
+# --- Admin "Overview" page -------------------------------------------------
+#
+# Everything below backs the single GET /api/admin/overview call the Overview
+# page polls, so one screen refresh is one query round-trip rather than six.
+#
+
+# Offers the agent team has taken on but not yet routed to a pantry.
+_BEING_EVALUATED_STATUSES = [OfferStatus.POSTED, OfferStatus.AGENT_WORKING, OfferStatus.NEEDS_HUMAN]
+
+# Deliveries where a driver is committed and the food is actually moving.
+_IN_TRANSIT_STATUSES = [DeliveryStatus.DRIVER_ASSIGNED, DeliveryStatus.PICKED_UP]
+
+# Deliveries that are over, either way — the denominator for the match-rate card.
+_FINISHED_DELIVERY_STATUSES = [DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED]
+
+
+def _percent_change(today: float, yesterday: float) -> float | None:
+    """Percent change today vs. yesterday, or None when yesterday had nothing to compare against.
+
+    None is deliberate: a card showing no trend arrow is honest on day one, where
+    "+100%" would imply a comparison that never happened.
+    """
+    if yesterday == 0:
+        return None
+    return round((today - yesterday) / yesterday * 100, 1)
+
+
+# `end=None` means "no upper bound", which is what every "so far today" window
+# wants. Passing utc_now() as an exclusive end instead would silently drop a row
+# written in the same clock tick as the query — on Windows, where the system
+# clock advances in ~16ms steps, that is frequent enough to lose real offers.
+def _count_offers_created_between(session: Session, start: datetime, end: datetime | None = None) -> int:
+    query = select(func.count()).select_from(Offer).where(Offer.created_at >= start)
+    if end is not None:
+        query = query.where(Offer.created_at < end)
+    return session.scalar(query) or 0
+
+
+def _sum_meals_delivered_between(session: Session, start: datetime, end: datetime | None = None) -> int:
+    query = select(func.coalesce(func.sum(Delivery.meals), 0)).where(
+        Delivery.status == DeliveryStatus.DELIVERED, Delivery.delivered_at >= start
+    )
+    if end is not None:
+        query = query.where(Delivery.delivered_at < end)
+    return int(session.scalar(query) or 0)
+
+
+def get_network_activity(session: Session) -> dict[str, int]:
+    """The five counts along the "Live network activity" strip, left to right.
+
+    Each one is a real stage of the pipeline described in docs/architecture.md,
+    so the strip reads as where work actually is right now, not as decoration.
+    """
+    restaurants_posting = (
+        session.scalar(
+            select(func.count(func.distinct(Offer.restaurant_id))).where(Offer.status.in_(ACTIVE_OFFER_STATUSES))
+        )
+        or 0
+    )
+    being_evaluated = (
+        session.scalar(select(func.count()).select_from(Offer).where(Offer.status.in_(_BEING_EVALUATED_STATUSES))) or 0
+    )
+    today_start = _start_of_today_utc()
+    pantries_receiving = (
+        session.scalar(
+            select(func.count(func.distinct(Delivery.pantry_id))).where(Delivery.created_at >= today_start)
+        )
+        or 0
+    )
+    drivers_en_route = (
+        session.scalar(select(func.count()).select_from(Delivery).where(Delivery.status.in_(_IN_TRANSIT_STATUSES)))
+        or 0
+    )
+    drivers_on_duty = (
+        session.scalar(select(func.count()).select_from(Driver).where(Driver.on_duty.is_(True))) or 0
+    )
+
+    return {
+        "restaurants_posting": restaurants_posting,
+        "offers_being_evaluated": being_evaluated,
+        "pantries_receiving_today": pantries_receiving,
+        "drivers_en_route": drivers_en_route,
+        "drivers_on_duty": drivers_on_duty,
+    }
+
+
+def get_overview_stats(session: Session) -> dict[str, Any]:
+    """The four headline cards, each with a day-over-day trend where one is meaningful."""
+    today_start = _start_of_today_utc()
+    yesterday_start = today_start - timedelta(days=1)
+
+    active_offers = (
+        session.scalar(select(func.count()).select_from(Offer).where(Offer.status.in_(ACTIVE_OFFER_STATUSES))) or 0
+    )
+    pending_decisions = (
+        session.scalar(select(func.count()).select_from(Decision).where(Decision.status == DecisionStatus.PENDING))
+        or 0
+    )
+
+    # "Meals being rescued" counts food in flight as well as food already
+    # delivered today — the point of the card is today's impact, and a delivery
+    # that lands at 4pm shouldn't make the number go down.
+    meals_in_flight = session.scalar(
+        select(func.coalesce(func.sum(Delivery.meals), 0)).where(Delivery.status.notin_(_FINISHED_DELIVERY_STATUSES))
+    )
+    meals_delivered_today = _sum_meals_delivered_between(session, today_start)
+    meals_rescued = int(meals_in_flight or 0) + meals_delivered_today
+
+    delivered_total = (
+        session.scalar(
+            select(func.count()).select_from(Delivery).where(Delivery.status == DeliveryStatus.DELIVERED)
+        )
+        or 0
+    )
+    finished_total = (
+        session.scalar(
+            select(func.count()).select_from(Delivery).where(Delivery.status.in_(_FINISHED_DELIVERY_STATUSES))
+        )
+        or 0
+    )
+    match_rate = round(delivered_total / finished_total * 100, 1) if finished_total else None
+
+    offers_today = _count_offers_created_between(session, today_start)
+    offers_yesterday = _count_offers_created_between(session, yesterday_start, today_start)
+    meals_yesterday = _sum_meals_delivered_between(session, yesterday_start, today_start)
+    decisions_today = (
+        session.scalar(select(func.count()).select_from(Decision).where(Decision.created_at >= today_start)) or 0
+    )
+    decisions_yesterday = (
+        session.scalar(
+            select(func.count())
+            .select_from(Decision)
+            .where(Decision.created_at >= yesterday_start, Decision.created_at < today_start)
+        )
+        or 0
+    )
+
+    return {
+        "active_offers": active_offers,
+        "active_offers_change": _percent_change(offers_today, offers_yesterday),
+        "meals_rescued": meals_rescued,
+        "meals_rescued_change": _percent_change(meals_delivered_today, meals_yesterday),
+        "match_rate": match_rate,
+        "pending_decisions": pending_decisions,
+        "pending_decisions_change": _percent_change(decisions_today, decisions_yesterday),
+    }
+
+
+def get_recent_network_activity(session: Session, limit: int = 8) -> list[dict[str, Any]]:
+    """The newest things that actually happened across the whole network, newest first.
+
+    Built by merging real timestamps already on the offers/deliveries/decisions
+    rows rather than by keeping a separate event table: there is exactly one
+    source of truth for "when did this happen", and the feed can never drift
+    from it.
+
+    This is deliberately business-level ("matched", "delivered"). The agent's own
+    tool-by-tool reasoning lives in the agent_log table and the Activity page.
+    """
+    events: list[dict[str, Any]] = []
+
+    recent_offers = session.scalars(
+        select(Offer).order_by(Offer.created_at.desc(), Offer.id.desc()).limit(limit)
+    )
+    for offer in recent_offers:
+        events.append(
+            {
+                "kind": "offer_posted",
+                "title": "New surplus offer",
+                "detail": f"{offer.quantity_text} from {offer.restaurant.name}",
+                "status": offer.status,
+                "offer_id": offer.id,
+                "at": offer.created_at,
+            }
+        )
+
+    recent_deliveries = session.scalars(
+        select(Delivery).order_by(Delivery.created_at.desc(), Delivery.id.desc()).limit(limit)
+    )
+    for delivery in recent_deliveries:
+        events.append(
+            {
+                "kind": "matched",
+                "title": "Donation matched",
+                "detail": f"{delivery.offer.title} → {delivery.pantry.name}",
+                "status": delivery.status,
+                "offer_id": delivery.offer_id,
+                "at": delivery.created_at,
+            }
+        )
+        if delivery.delivered_at is not None:
+            events.append(
+                {
+                    "kind": "delivered",
+                    "title": "Delivery completed",
+                    "detail": f"{delivery.meals or 0} meals to {delivery.pantry.name}",
+                    "status": DeliveryStatus.DELIVERED,
+                    "offer_id": delivery.offer_id,
+                    "at": delivery.delivered_at,
+                }
+            )
+
+    recent_decisions = session.scalars(
+        select(Decision).order_by(Decision.created_at.desc(), Decision.id.desc()).limit(limit)
+    )
+    for decision in recent_decisions:
+        events.append(
+            {
+                "kind": "needs_human",
+                "title": "Agent needs a human decision",
+                # The agent wrote this title itself when it called ask_admin.
+                "detail": decision.card.get("title", decision.offer.title),
+                "status": decision.status,
+                "offer_id": decision.offer_id,
+                "at": decision.created_at,
+            }
+        )
+
+    events.sort(key=lambda event: event["at"], reverse=True)
+    return events[:limit]
 
 
 def list_all_users(session: Session) -> list[User]:

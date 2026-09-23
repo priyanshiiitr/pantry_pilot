@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../../api.js";
 import { useAuth } from "../../auth/AuthContext.jsx";
 import DeclineButton from "../../components/DeclineButton.jsx";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
@@ -30,7 +30,7 @@ export default function DriverHome() {
   }
 
   return (
-    <Layout title="Driver dashboard">
+    <AppShell title="Driver dashboard">
       <p className="muted">Welcome, {user.display_name}.</p>
       <p>
         <Link to="/driver/profile">Edit your profile →</Link>
@@ -107,6 +107,6 @@ export default function DriverHome() {
           ))}
         </ul>
       )}
-    </Layout>
+    </AppShell>
   );
 }

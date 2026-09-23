@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import WeeklyHoursEditor from "../../components/WeeklyHoursEditor.jsx";
 import { useProfileForm } from "../../hooks/useProfileForm.js";
 
@@ -9,7 +9,7 @@ export default function DriverProfile() {
   const { form, updateField, save, error, saving, savedMessage } = useProfileForm("/api/driver/profile");
 
   return (
-    <Layout title="Driver profile">
+    <AppShell title="Driver profile">
       <p>
         <Link to="/driver">← Back to dashboard</Link>
       </p>
@@ -94,6 +94,6 @@ export default function DriverProfile() {
           </button>
         </form>
       )}
-    </Layout>
+    </AppShell>
   );
 }

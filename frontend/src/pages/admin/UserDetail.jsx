@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { apiGet } from "../../api.js";
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import { usePolling } from "../../hooks/usePolling.js";
 
@@ -20,7 +20,7 @@ export default function UserDetail() {
   const { data: user, error } = usePolling(() => apiGet(`/api/admin/users/${userId}`), 5000, [userId]);
 
   return (
-    <Layout title="User detail">
+    <AppShell title="User detail">
       <p>
         <Link to="/admin/users">← Back to all users</Link>
       </p>
@@ -64,6 +64,6 @@ export default function UserDetail() {
           )}
         </>
       )}
-    </Layout>
+    </AppShell>
   );
 }

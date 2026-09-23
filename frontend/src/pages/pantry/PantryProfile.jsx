@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import Layout from "../../components/Layout.jsx";
+import AppShell from "../../components/AppShell.jsx";
 import WeeklyHoursEditor from "../../components/WeeklyHoursEditor.jsx";
 import { useProfileForm } from "../../hooks/useProfileForm.js";
 
@@ -25,7 +25,7 @@ export default function PantryProfile() {
   }
 
   return (
-    <Layout title="Pantry profile">
+    <AppShell title="Pantry profile">
       <p>
         <Link to="/pantry">← Back to dashboard</Link>
       </p>
@@ -131,6 +131,6 @@ export default function PantryProfile() {
           </button>
         </form>
       )}
-    </Layout>
+    </AppShell>
   );
 }

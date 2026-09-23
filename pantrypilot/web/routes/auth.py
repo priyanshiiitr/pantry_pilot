@@ -7,11 +7,16 @@ session. No AI is involved in deciding whether to let someone log in.
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from pantrypilot.auth.current_user import SESSION_USER_KEY, get_optional_user
+from pantrypilot.auth.current_user import (
+    SESSION_USER_KEY,
+    SESSION_VIEW_AS_KEY,
+    get_optional_user,
+    get_real_user,
+)
 from pantrypilot.database import get_db
 from pantrypilot.models import Role, User
-from pantrypilot.services.accounts import authenticate, create_account
-from pantrypilot.web.schemas import LoginRequest, MeResponse, SignupRequest, UserOut
+from pantrypilot.services.accounts import authenticate, create_account, pick_account_to_preview
+from pantrypilot.web.schemas import LoginRequest, MeResponse, SignupRequest, UserOut, ViewAsRequest
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -54,11 +59,43 @@ def logout(request: Request) -> dict[str, bool]:
 
 
 @router.get("/me", response_model=MeResponse)
-def me(user: User | None = Depends(get_optional_user)) -> MeResponse:
+def me(
+    user: User | None = Depends(get_optional_user), real_user: User | None = Depends(get_real_user)
+) -> MeResponse:
     """Tell the frontend who (if anyone) is currently logged in.
 
     Deliberately returns 200 with user=None instead of a 401 error, because
     "nobody is logged in yet" is a normal state, not a failure, every time a
     page first loads.
+
+    `real_user` differs from `user` only while an admin is previewing another
+    role, which is how the sidebar knows to show the "viewing as" banner.
     """
-    return MeResponse(user=UserOut.from_user(user) if user else None)
+    return MeResponse(
+        user=UserOut.from_user(user) if user else None,
+        real_user=UserOut.from_user(real_user) if real_user else None,
+    )
+
+
+@router.post("/view-as", response_model=MeResponse)
+def view_as(payload: ViewAsRequest, request: Request, db: Session = Depends(get_db)) -> MeResponse:
+    """Let an admin preview another role's dashboard without logging out.
+
+    Deliberately depends on get_real_user, not get_current_user: an admin who is
+    already previewing a restaurant must still be able to switch again or return
+    to their own view, and only the account that truly logged in may do either.
+    """
+    real_user = get_real_user(request, db)
+    if real_user is None or real_user.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Only an admin can switch views.")
+
+    if payload.role is None or payload.role == Role.ADMIN:
+        request.session.pop(SESSION_VIEW_AS_KEY, None)
+        return MeResponse(user=UserOut.from_user(real_user), real_user=UserOut.from_user(real_user))
+
+    previewed = pick_account_to_preview(db, Role(payload.role))
+    if previewed is None:
+        raise HTTPException(status_code=404, detail=f"There are no {payload.role} accounts to preview yet.")
+
+    request.session[SESSION_VIEW_AS_KEY] = previewed.id
+    return MeResponse(user=UserOut.from_user(previewed), real_user=UserOut.from_user(real_user))
