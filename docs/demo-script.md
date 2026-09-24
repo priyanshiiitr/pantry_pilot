@@ -1,73 +1,197 @@
 # Demo script (~5 minutes)
 
-Goal: show a genuinely autonomous agent team doing real coordination work, and then show it stopping to
-ask a human at a real judgment call — not a scripted "click here to see the AI" button.
+For the **deployed** app. The local version is at the bottom.
 
-## Before you start recording
+| | |
+|---|---|
+| App | https://pantry-pilot-twoe.vercel.app |
+| API | https://pantrypilot-api-ou1p.onrender.com |
+| Password (every account) | `demo1234` |
 
-```powershell
-python -m scripts.seed_demo --reset      # fresh Seattle world, all passwords: demo1234
-uvicorn pantrypilot.web.main:app --reload   # terminal 1
-cd frontend; npm run dev                     # terminal 2
-python -m pantrypilot.worker                 # terminal 3 — the agents wake up on their own from here
-```
+Goal: show an agent team doing real coordination on its own, and then stopping
+to ask a human at a real judgment call — not a "click here to see the AI" button.
 
-Open two browser windows side by side: one logged in as a **restaurant**
-(`bella@pantrypilot.test` / `demo1234`), one as the **admin** (`admin@pantrypilot.test` / `demo1234`).
+---
+
+## Before you hit record
+
+**1. Wake the API.** Render's free tier sleeps; a cold start is ~30 seconds and
+you don't want it on camera. Open the health URL and wait for `{"ok":true,...}`:
+
+    https://pantrypilot-api-ou1p.onrender.com/api/health
+
+**2. Log in as admin** at the app URL: `admin@pantrypilot.test` / `demo1234`.
+
+**3. Have a second browser window ready** — you'll want to jump between the
+restaurant and admin views. Or use Switch View, which is the point of it.
+
+**4. Know the timing.** The cron fires every minute, and an agent run takes one
+to three minutes on Groq's free tier. Post the offer, then talk over the wait —
+the activity feed fills while you speak, which is better television than silence.
+
+---
 
 ## Shot list
 
-**0:00 – The problem (10s, talking over the empty restaurant dashboard)**
-"Restaurants throw away good surplus food every day because matching it to a pantry and a driver is a
-phone-and-spreadsheet job. PantryPilot's agents do that coordination themselves."
+### 0:00 — The problem (15s)
 
-**0:10 – Post a normal offer (30s)**
-As the restaurant, post a straightforward surplus offer (e.g. "40 sandwich platters, pickup by 6pm").
-Point out: no dropdown picked a pantry, no button said "run the agent" — the worker's
-`pick_up_new_offers` job (every 15s) will pick this up on its own.
+On the admin Overview.
 
-**0:40 – Show the agents working (60s)**
-Switch to the admin view → **Agent activity**. Refresh (or let it poll) and narrate the log as it fills
-in: Intake reading the offer, Matching checking nearby pantries' capacity and fairness, Dispatch finding a
-driver, the Coordinator deciding to commit. Emphasize: *this is the model's own reasoning*, logged via a
-Strands hook, not a canned status string.
+> "Restaurants throw away good food every day, because matching it to a pantry
+> and a driver is a phone-and-spreadsheet job nobody has time for. PantryPilot
+> does that coordination itself — and only interrupts a human when there's a
+> real decision to make."
 
-**1:40 – See the outcome (20s)**
-Show the offer's status moving to matched/dispatched, and the pantry/driver's own screens reflecting the
-same offer showing up as a request.
+### 0:15 — Post an offer (30s)
 
-**2:00 – Trigger a real judgment call (20s)**
-In a terminal: `python -m scripts.trigger_hard_case --scenario spoilage` (also try `no_drivers`,
-`fairness`, or `unclear_allergens` if time allows). Explain: this sets up a genuinely hard situation — a
-tight spoilage window, no available driver, a fairness conflict, or an ambiguous allergen note — it does
-not force the escalation in code. Whether the agent actually asks a human is its own call.
+Sidebar → **Switch view → Restaurant → Golden Crust Bakery**. Then **Post surplus**.
 
-**2:20 – The pause, live (60s)**
-Wait for the worker's next tick (up to 15s), then switch to admin → **Decisions inbox**. A new card
-appears: the Coordinator's own title, situation, reasoning, and options — written by the model, shown
-verbatim, not reshaped by our code. Narrate: the agent's conversation is *actually paused* right now (a
-real Strands interrupt, `tool_context.interrupt(...)`), sitting on disk in its session file, not just a
-flag we set.
+| Field | Value |
+|---|---|
+| Title | `Leftover chicken biryani` |
+| Description | `Three large trays of chicken biryani from a cancelled catering order. Cooked 2 hours ago, still hot. Also 40 raita cups.` |
+| Quantity | `3 trays plus 40 raita cups, about 50 servings` |
+| Allergens | `dairy` |
+| Deadline | 3 hours from now |
 
-**3:20 – Answer it (30s)**
-As the admin, pick one of the agent's own suggested options (or add a note) and submit.
+> "I'm typing this the way a busy restaurant manager actually would — messy
+> free text, no weights, no structured fields. Notice I never chose a pantry or
+> a driver. There's no 'run the agent' button either."
 
-**3:50 – The resume (40s)**
-Point out the worker's `resume_answered_decisions` job (every 10s) picks this up next — a brand-new Python
-`Agent` object gets built, reloads the exact paused conversation from `agents/sessions.py`'s session file,
-and continues as if nothing happened. Refresh Agent activity to show it finishing the case after the
-human's answer.
+### 0:45 — Nothing happens, on purpose (15s)
 
-**4:30 – Wrap (30s)**
-"Three specialist agents, a manager agent deciding how to use them, real memory across restarts, and a
-real pause-and-resume when it hits something only a person should decide. That's the whole system —
-[`docs/architecture.md`](architecture.md) has the full diagram, and the README lists exactly which Strands
-feature backs each piece."
+Stay on the offer page. It says **Posted**, all five stages waiting.
 
-## If something goes wrong live
+> "Nothing is happening yet, and that's the point. A scheduler wakes the agents
+> on their own. Nobody is triggering this."
 
-- **No decision appeared**: the model sometimes finds a safe way through a hard case on its own — that's a
-  legitimate outcome, not a bug. Check Agent activity for its reasoning, or try a different `--scenario`.
-- **Groq rate limit**: switch `.env`'s `MODEL_PROVIDER`/keys to a backup account, restart the worker.
-- **Nothing is moving**: confirm all three processes (web, frontend, worker) are running — the worker is
-  what makes the agents wake up; without it, offers just sit at `status=posted`.
+### 1:00 — Watch it think (75s)
+
+The stage tracker starts moving. **What the agents did** fills in below it.
+
+> "Intake just read that free text and turned it into structured data — it
+> worked out the weight, spotted the dairy, decided it needs refrigeration.
+> Now Matching is comparing pantries on capacity, fairness, dietary rules and
+> opening hours. Then Dispatch looks for a driver who can actually make the
+> deadline."
+
+Point at a couple of real lines in the feed as they appear. Then:
+
+> "This is the model's own reasoning, logged as it happens. Not a progress bar."
+
+### 2:15 — The outcome (20s)
+
+Stages go green: **Understood → Pantry matched → Driver assigned**.
+
+> "It picked the pantry, picked the driver, and wrote the reason for both."
+
+### 2:35 — The driver's side, without logging out (25s)
+
+Sidebar → **Switch view → Driver**. The list shows a **red badge** next to
+whoever was asked.
+
+> "I'm still signed in as the admin — this is a preview. And notice the badge:
+> it's telling me which of eight drivers the agents actually asked."
+
+Click that driver → **Accept** → **Mark picked up** → **Mark delivered**.
+
+### 3:00 — Now the interesting part (20s)
+
+Switch back to **Admin**, then a restaurant, and post a deliberately hard offer:
+
+| Field | Value |
+|---|---|
+| Title | `Fresh cream pastries` |
+| Description | `80 fresh cream-filled pastries, made 3 hours ago. Must be refrigerated immediately or they are unsafe.` |
+| Quantity | `80 pastries` |
+| Allergens | `dairy, eggs, gluten` |
+| Deadline | **20 minutes from now** |
+
+> "Same system, but this one is genuinely hard — a 20-minute window on food
+> that spoils. I'm not forcing anything; I'm just giving it a problem that
+> might not have a safe answer."
+
+### 3:20 — It stops and asks (60s)
+
+Admin → **Decisions**. A card appears.
+
+> "It stopped. This card is the agent's own writing — the title, the situation,
+> the options with their consequences, and which one it would pick. Not a
+> template.
+>
+> And this isn't a status flag we set. The agent's conversation is genuinely
+> paused mid-thought, saved to disk. It is waiting."
+
+Read one option aloud. Then answer it.
+
+### 4:20 — It picks up where it left off (30s)
+
+> "Within ten seconds the scheduler notices my answer, rebuilds the agent, and
+> loads that exact paused conversation back — then carries on from the moment
+> it stopped. It doesn't start over."
+
+Refresh the activity feed to show it continuing.
+
+### 4:50 — Close (20s)
+
+Back to the Overview.
+
+> "Four agents — a coordinator and three specialists. Real memory across
+> restarts. And a genuine pause-and-resume when it hits something only a person
+> should decide. That last part is the whole idea: not an AI that acts like it
+> knows everything, but one that knows when it doesn't."
+
+---
+
+## If it goes wrong on camera
+
+**Nothing is moving.** The cron only fires once a minute. To force it now:
+
+```bash
+curl -X POST https://pantrypilot-api-ou1p.onrender.com/api/tick \
+  -H "X-Tick-Secret: YOUR_TICK_SECRET"
+```
+
+Returns `202` immediately — that means *started*, not finished.
+
+**No decision card appeared.** The agent found a safe route on its own. That's a
+legitimate outcome, not a bug — say so, show its reasoning in the activity feed,
+and try the `no_drivers` or `fairness` scenario instead. Honesty here reads
+better than pretending.
+
+**Everything looks logged out.** `FRONTEND_ORIGINS` on Render no longer matches
+the Vercel URL exactly. Nothing else causes this.
+
+**It is very slow.** Groq's free tier caps tokens per minute per key. Failover
+across six keys measured 48,000 tokens/minute and zero full backoffs — if it is
+still crawling, a key has likely been revoked.
+
+---
+
+## Running it locally instead
+
+Three terminals, from the project folder:
+
+```bash
+uvicorn pantrypilot.web.main:app --reload    # 1
+cd frontend && npm run dev                   # 2
+python -m pantrypilot.worker                 # 3  <- this is what wakes the agents
+```
+
+Then http://localhost:5173. Locally the worker polls every **15 seconds** rather
+than every minute, so the whole demo runs faster — worth using if you are
+recording and want less dead air.
+
+To drive one offer by hand and watch every tool call stream past:
+
+```bash
+python -m scripts.run_agent_once --offer <id>
+```
+
+To set up a hard case deliberately:
+
+```bash
+python -m scripts.trigger_hard_case --scenario spoilage
+```
+
+(also `no_drivers`, `fairness`, `unclear_allergens`)
