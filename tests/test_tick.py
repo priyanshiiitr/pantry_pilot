@@ -37,15 +37,16 @@ def no_jobs_run(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 def test_tick_runs_every_job(client: TestClient, tick_enabled: None, no_jobs_run: list[str]) -> None:
-    """One call does one pass of the same three jobs the worker schedules."""
+    """One call does one pass of the same three jobs the worker schedules.
+
+    202, not 200: the endpoint answers before the work finishes. TestClient runs
+    background tasks before returning, so the jobs have still run by the time we
+    look.
+    """
     response = client.post("/api/tick", headers={"X-Tick-Secret": SECRET})
 
-    assert response.status_code == 200
-    assert response.json()["ran"] == {
-        "expire_stale_dispatch_requests": "ok",
-        "resume_answered_decisions": "ok",
-        "pick_up_new_offers": "ok",
-    }
+    assert response.status_code == 202
+    assert response.json()["started"] is True
     assert no_jobs_run == ["expire", "resume", "pick_up"]
 
 
@@ -69,10 +70,9 @@ def test_a_failing_job_does_not_stop_the_others(
         tick, "JOBS", (("resume_answered_decisions", explode), ("pick_up_new_offers", lambda: ran.append("pick_up")))
     )
 
-    body = client.post("/api/tick", headers={"X-Tick-Secret": SECRET}).json()["ran"]
+    response = client.post("/api/tick", headers={"X-Tick-Secret": SECRET})
 
-    assert "failed" in body["resume_answered_decisions"]
-    assert body["pick_up_new_offers"] == "ok"
+    assert response.status_code == 202
     assert ran == ["pick_up"]
 
 
@@ -130,3 +130,48 @@ def test_no_configured_origins_means_no_cors(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(settings, "frontend_origins", "")
 
     assert settings.allowed_origins == []
+
+
+def test_the_response_does_not_wait_for_the_agents(client: TestClient, tick_enabled: None, monkeypatch) -> None:
+    """The whole point of 202: a slow agent run must not become a cron timeout.
+
+    pick_up_new_offers runs the full agent team, which takes minutes on a free
+    model tier, while cron services give up after about thirty seconds. Waiting
+    made every successful run look like a failure — and get retried.
+    """
+    from fastapi import BackgroundTasks
+
+    scheduled: list[object] = []
+    monkeypatch.setattr(BackgroundTasks, "add_task", lambda self, fn, *a, **k: scheduled.append(fn))
+
+    response = client.post("/api/tick", headers={"X-Tick-Secret": SECRET})
+
+    assert response.status_code == 202
+    assert len(scheduled) == 1  # handed off, not executed inline
+
+
+def test_an_overlapping_tick_is_skipped_not_queued(tick_enabled: None, no_jobs_run: list[str]) -> None:
+    """A minute-by-minute schedule must not stack up concurrent agent runs.
+
+    They would compete for the same rate-limited token budget and make each
+    other slower, so a tick arriving while one is in flight does nothing.
+    """
+    tick._tick_lock.acquire()
+    try:
+        tick.run_jobs_once()
+    finally:
+        tick._tick_lock.release()
+
+    assert no_jobs_run == []
+
+
+def test_the_lock_is_released_even_if_a_job_raises(tick_enabled: None, monkeypatch) -> None:
+    """A crashed job must not wedge the endpoint into skipping forever."""
+
+    def explode() -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(tick, "JOBS", (("pick_up_new_offers", explode),))
+    tick.run_jobs_once()
+
+    assert not tick._tick_lock.locked()
